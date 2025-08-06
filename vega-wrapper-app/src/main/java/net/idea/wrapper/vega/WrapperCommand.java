@@ -49,31 +49,35 @@ public class WrapperCommand implements Callable<Integer> {
             description = "Enable fast mode (default: false)")
     boolean fastmode = false;
 
+    @Option(names = {"--list-models"}, description = "List available models", help = true)
+    boolean listModels;
         
-
     @Override
     public Integer call() throws Exception {
-        // Replace with your actual class/method names
         try {
-            if (!outputDir.exists()) {
-                if (!outputDir.mkdirs()) {
-                    throw new IOException("Failed to create output directory: " + outputDir.getAbsolutePath());
+            if (listModels) {
+                
+                return 0;
+            } else {
+                if (!outputDir.exists()) {
+                    if (!outputDir.mkdirs()) {
+                        throw new IOException("Failed to create output directory: " + outputDir.getAbsolutePath());
+                    }
+                } else if (!outputDir.isDirectory()) {
+                    throw new IllegalArgumentException("Provided output path is not a directory: " + outputDir.getAbsolutePath());
                 }
-            } else if (!outputDir.isDirectory()) {
-                throw new IllegalArgumentException("Provided output path is not a directory: " + outputDir.getAbsolutePath());
+
+                ArrayList<InsilicoMolecule> dataset = new ArrayList<InsilicoMolecule>();
+                InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
+                dataset.add(mol);
+
+                String classname = "insilico.bcf_meylan.ismBCFMeylan";
+                InsilicoModel model = (InsilicoModel) Class.forName(classname).getDeclaredConstructor().newInstance();
+                if (fastmode)
+                    return run_fast(model , dataset, outputDir);            
+                else
+                    return run_vega(model , dataset, outputDir);            
             }
-
-            ArrayList<InsilicoMolecule> dataset = new ArrayList<InsilicoMolecule>();
-            InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
-            dataset.add(mol);
-
-            String classname = "insilico.bcf_meylan.ismBCFMeylan";
-            InsilicoModel model = (InsilicoModel) Class.forName(classname).getDeclaredConstructor().newInstance();
-            if (fastmode)
-                return run_fast(model , dataset, outputDir);            
-            else
-                return run_vega(model , dataset, outputDir);            
-    
         } catch (Exception e) {
             e.printStackTrace();
             return 1;
