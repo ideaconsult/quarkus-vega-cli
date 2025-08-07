@@ -19,6 +19,7 @@ import insilico.core.model.runner.InsilicoModelRunnerByMolecule;
 import insilico.core.model.runner.InsilicoModelWrapper;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.molecule.conversion.SmilesMolecule;
+import insilico.core.molecule.conversion.file.MoleculeFileSmiles;
 import net.idea.wrapper.ModelResultWriter;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
@@ -41,11 +42,11 @@ public class WrapperCommand implements Callable<Integer> {
     @ArgGroup(exclusive = true, multiplicity = "1")
     InputGroup inputGroup;
 
-    @Option(names = {"--smilesfield"}, description = "Name of the column with SMILES")
-    String smilesField;
+    @Option(names = {"--smilesfield"}, description = "Name of the column with SMILES, default SMILES")
+    String smilesField = "SMILES";
 
-    @Option(names = {"--idfield"}, description = "Name of the column with molecule ID")
-    String idField;    
+    @Option(names = {"--idfield"}, description = "Name of the column with molecule ID, default ID")
+    String idField = "ID";    
 
     @Option(names = {"-m", "--model"}, description = "Model key", required = true)
     String modelKey;
@@ -72,6 +73,7 @@ public class WrapperCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         try {
+
             if (listModels) {
                 ImplScanner.list_models(false, outputDir);
                 return 0;
@@ -104,9 +106,25 @@ public class WrapperCommand implements Callable<Integer> {
                         );
                     System.out.println("\nDone.");
                 } else {
-                    ArrayList<InsilicoMolecule> dataset = new ArrayList<InsilicoMolecule>();
-                    InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
-                    dataset.add(mol);
+                    ArrayList<InsilicoMolecule> dataset = null;
+                    if (inputGroup.smiles != null) {
+                        dataset = new ArrayList<InsilicoMolecule>();
+                        InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
+                        dataset.add(mol);
+                    } else {
+                        int[] positions = WrapperCommand.getFieldPositions(
+                            inputGroup.inputFile, smilesField, idField);
+                        int smilesPos = positions[0];
+                        int idPos = positions[1]; // can be -1   
+                        System.out.printf("%s %d %s %d", smilesField, smilesPos,idField, idPos);
+                        MoleculeFileSmiles SMIReader = new MoleculeFileSmiles();
+                        SMIReader.setCASField(-1);
+                        SMIReader.setIdField(idPos);
+                        SMIReader.setSmilesField(smilesPos);
+                        SMIReader.OpenFile(inputGroup.inputFile.getAbsolutePath());
+                        dataset = SMIReader.ReadAll();
+                        SMIReader.CloseFile();                        
+                    }
                     rowNum = run_vega(model , dataset, outputDir);
                 }
                 endTime = System.nanoTime();
@@ -187,8 +205,10 @@ public class WrapperCommand implements Callable<Integer> {
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
                 rowNum++;
-                System.out.print("\rProcessed rows: " + rowNum);
-                System.out.flush();
+                if (rowNum % 20 == 0) {
+                    System.out.print("\rProcessed rows: " + rowNum);
+                    System.out.flush();
+                }                
                 String[] fields = line.split("\t", -1); // include trailing empty fields
                 if (fields.length <= Math.max(smilesIndex, idIndex)) continue;
 
@@ -219,6 +239,21 @@ public class WrapperCommand implements Callable<Integer> {
 
         resultWriter.close();
         return rowNum;
+    }
+
+    public static int[] getFieldPositions(File inputFile, String smilesField, String idField) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String[] headers = reader.readLine().split("\t");
+            int smilesIdx = -1, idIdx = -1;
+
+            for (int i = 0; i < headers.length; i++) {
+                if (headers[i].trim().equalsIgnoreCase(smilesField)) smilesIdx = i;
+                if (headers[i].trim().equalsIgnoreCase(idField)) idIdx = i;
+            }
+
+            if (smilesIdx == -1) throw new IllegalArgumentException("SMILES field not found: " + smilesField);
+            return new int[]{smilesIdx, idIdx}; // idIdx may be -1 if not found or not needed
+        }
     }
 
 }
