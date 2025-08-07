@@ -205,10 +205,10 @@ public class WrapperCommand implements Callable<Integer> {
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
                 rowNum++;
-                if (rowNum % 20 == 0) {
-                    System.out.print("\rProcessed rows: " + rowNum);
-                    System.out.flush();
-                }                
+                //if (rowNum % 2 == 0) {
+                System.out.print("\rProcessed rows: " + rowNum);
+                System.out.flush();
+                //}                
                 String[] fields = line.split("\t", -1); // include trailing empty fields
                 if (fields.length <= Math.max(smilesIndex, idIndex)) continue;
 
