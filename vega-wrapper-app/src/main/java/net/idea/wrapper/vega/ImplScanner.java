@@ -6,9 +6,11 @@ import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ScanResult;
 
 import java.io.BufferedWriter;
-import java.io.FileWriter;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.io.File;
+import java.io.FileOutputStream;
 
 
 public class ImplScanner {
@@ -18,7 +20,10 @@ public class ImplScanner {
                 .enableClassInfo()
                 .acceptPackages("insilico.*") // adjust to match your package(s)
                 .scan();
-            PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(outputFile)))                
+            PrintWriter out = new PrintWriter(
+                new BufferedWriter(
+                    new OutputStreamWriter(
+                        new FileOutputStream(outputFile), StandardCharsets.UTF_8)))            
                 ) {
 
             var implClasses = scanResult

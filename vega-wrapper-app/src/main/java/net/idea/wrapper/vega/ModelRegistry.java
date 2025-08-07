@@ -26,7 +26,7 @@ public class ModelRegistry {
                 while ((line = reader.readLine()) != null) {
                     if (line.trim().isEmpty() || line.startsWith("#")) continue;
                     String[] parts = line.split("\t");
-                    if (parts.length == 2) {
+                    if (parts.length == 3) {
                         modelMap.put(parts[0].trim(), parts[1].trim());
                     }
                 }

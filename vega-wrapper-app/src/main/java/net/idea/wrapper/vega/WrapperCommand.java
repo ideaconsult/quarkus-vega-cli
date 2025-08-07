@@ -5,11 +5,16 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
 
 import insilico.core.model.InsilicoModel;
 import insilico.core.model.InsilicoModelOutput;
@@ -49,7 +54,7 @@ public class WrapperCommand implements Callable<Integer> {
     @Option(names = {"--idfield"}, description = "Name of the column with molecule ID, default ID")
     String idField = "ID";    
 
-    @Option(names = {"-m", "--model"}, description = "Model key", required = true)
+    @Option(names = {"-m", "--model"}, description = "Model key (see --list-models) or file with model keys", required = true)
     String modelKey;
 
     @Option(names = {"-o", "--output"}, description = "Output report folder", required = true)
@@ -62,7 +67,7 @@ public class WrapperCommand implements Callable<Integer> {
     @Option(names = {"-x", "--maxrows"}, description = "Max rows to process from file, default ALL", required = false)
     int maxRows = -1;
 
-    @Option(names = {"-l", "--list-models"}, description = "List available models", help = true)
+    @Option(names = {"-l", "--list-models"}, description = "List available models. Specify output file e.g. -o models.txt", help = true)
     boolean listModels;
 
         
@@ -73,6 +78,68 @@ public class WrapperCommand implements Callable<Integer> {
         for (iInsilicoModel impl : loader) {
             System.out.println("Discovered: " + impl.getClass().getName());
             // impl.doSomething();
+        }
+    }
+
+    protected int runModel(String modelKey) throws Exception {
+        try {
+            long startTime = System.nanoTime();
+            InsilicoModel model = ModelRegistry.getModelByKey(modelKey);
+            long endTime = System.nanoTime();
+            long elapsedNano = endTime - startTime;
+            double elapsedSeconds = elapsedNano / 1_000_000_000.0;                
+            System.out.printf("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds);
+
+            int rowNum = 0;
+            if (inputGroup.inputFile == null) fastmode = false;
+            startTime = System.nanoTime();
+            if (fastmode) {
+                System.out.println("Processing in fast mode ...");
+                rowNum = run_fast(
+                            model,
+                            inputGroup.inputFile,
+                            outputDir,
+                            smilesField,
+                            idField
+                    );
+                System.out.println("\nDone.");
+            } else {
+                ArrayList<InsilicoMolecule> dataset = null;
+                if (inputGroup.smiles != null) {
+                    dataset = new ArrayList<InsilicoMolecule>();
+                    InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
+                    dataset.add(mol);
+                } else {
+                    int[] positions = WrapperCommand.getFieldPositions(
+                        inputGroup.inputFile, smilesField, idField);
+                    int smilesPos = positions[0];
+                    int idPos = positions[1]; // can be -1   
+                    System.out.printf("%s %d %s %d", smilesField, smilesPos,idField, idPos);
+                    MoleculeFileSmiles SMIReader = new MoleculeFileSmiles();
+                    SMIReader.setCASField(-1);
+                    SMIReader.setIdField(idPos);
+                    SMIReader.setSmilesField(smilesPos);
+                    SMIReader.OpenFile(inputGroup.inputFile.getAbsolutePath());
+                    dataset = SMIReader.ReadAll();
+                    SMIReader.CloseFile();                        
+                    System.out.println("Loaded  "+ inputGroup.inputFile);
+                }
+                
+                rowNum = run_vega(model , dataset, outputDir);
+            }
+            endTime = System.nanoTime();
+            elapsedNano = endTime - startTime;
+            elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
+            if (rowNum > 0) {
+                double avgPerRow = elapsedSeconds / rowNum;
+                System.out.printf("Elapsed time: %.2f seconds%n", elapsedSeconds);
+                System.out.printf("Average time per row: %.4f seconds%n", avgPerRow);
+            } else {
+                System.out.println("No rows processed.");
+            }                
+            return rowNum>0?0:1;
+        }  catch (Exception x) {
+            throw x;
         }
     }
     @Override
@@ -90,61 +157,21 @@ public class WrapperCommand implements Callable<Integer> {
                 } else if (!outputDir.isDirectory()) {
                     throw new IllegalArgumentException("Provided output path is not a directory: " + outputDir.getAbsolutePath());
                 }
-                long startTime = System.nanoTime();
-                InsilicoModel model = ModelRegistry.getModelByKey(modelKey);
-                long endTime = System.nanoTime();
-                long elapsedNano = endTime - startTime;
-                double elapsedSeconds = elapsedNano / 1_000_000_000.0;                
-                System.out.printf("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds);
-
-                int rowNum = 0;
-                if (inputGroup.inputFile == null) fastmode = false;
-                startTime = System.nanoTime();
-                if (fastmode) {
-                    System.out.println("Processing in fast mode ...");
-                    rowNum = run_fast(
-                                model,
-                                inputGroup.inputFile,
-                                outputDir,
-                                smilesField,
-                                idField
-                        );
-                    System.out.println("\nDone.");
-                } else {
-                    ArrayList<InsilicoMolecule> dataset = null;
-                    if (inputGroup.smiles != null) {
-                        dataset = new ArrayList<InsilicoMolecule>();
-                        InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
-                        dataset.add(mol);
-                    } else {
-                        int[] positions = WrapperCommand.getFieldPositions(
-                            inputGroup.inputFile, smilesField, idField);
-                        int smilesPos = positions[0];
-                        int idPos = positions[1]; // can be -1   
-                        System.out.printf("%s %d %s %d", smilesField, smilesPos,idField, idPos);
-                        MoleculeFileSmiles SMIReader = new MoleculeFileSmiles();
-                        SMIReader.setCASField(-1);
-                        SMIReader.setIdField(idPos);
-                        SMIReader.setSmilesField(smilesPos);
-                        SMIReader.OpenFile(inputGroup.inputFile.getAbsolutePath());
-                        dataset = SMIReader.ReadAll();
-                        SMIReader.CloseFile();                        
-                        System.out.println("Loaded  "+ inputGroup.inputFile);
+                File file_models = new File(modelKey);
+                if (file_models.exists()) {
+                    List<String> model_keys = Files.lines(file_models.toPath(), StandardCharsets.UTF_8)
+                                .skip(1)
+                                .map(line -> line.split("\t")[0])
+                                .collect(Collectors.toList());                   
+                    int rownum = 0;
+                    for (String model_key:model_keys) {
+                        rownum += runModel(model_key);
                     }
-                    
-                    rowNum = run_vega(model , dataset, outputDir);
+                    return rownum;
+                } else {    
+                    return runModel(modelKey);
                 }
-                endTime = System.nanoTime();
-                elapsedNano = endTime - startTime;
-                elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
-                if (rowNum > 0) {
-                    double avgPerRow = elapsedSeconds / rowNum;
-                    System.out.printf("Elapsed time: %.2f seconds%n", elapsedSeconds);
-                    System.out.printf("Average time per row: %.4f seconds%n", avgPerRow);
-                } else {
-                    System.out.println("No rows processed.");
-                }                
-                return rowNum>0?0:1;
+
             }
         } catch (Exception e) {
             e.printStackTrace();
