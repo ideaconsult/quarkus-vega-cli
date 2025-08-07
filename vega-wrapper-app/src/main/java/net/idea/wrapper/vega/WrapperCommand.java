@@ -5,17 +5,17 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
+import insilico.core.ad.item.iADIndex;
 import insilico.core.model.InsilicoModel;
 import insilico.core.model.InsilicoModelOutput;
 import insilico.core.model.iInsilicoModel;
@@ -94,7 +94,7 @@ public class WrapperCommand implements Callable<Integer> {
             if (inputGroup.inputFile == null) fastmode = false;
             startTime = System.nanoTime();
             if (fastmode) {
-                System.out.println("Processing in fast mode ...");
+                System.out.printf("Processing %s in fast mode ...", modelKey);
                 rowNum = run_fast(
                             model,
                             inputGroup.inputFile,
@@ -132,7 +132,7 @@ public class WrapperCommand implements Callable<Integer> {
             elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
             if (rowNum > 0) {
                 double avgPerRow = elapsedSeconds / rowNum;
-                System.out.printf("Elapsed time: %.2f seconds%n", elapsedSeconds);
+                System.out.printf("[%s] Elapsed time: %.2f seconds%n\n", model.getInfo().getKey(), elapsedSeconds);
                 System.out.printf("Average time per row: %.4f seconds%n", avgPerRow);
             } else {
                 System.out.println("No rows processed.");
@@ -277,18 +277,31 @@ public class WrapperCommand implements Callable<Integer> {
                 InsilicoModelOutput output = model.Execute(mol);
 
                 Map<String, Object> record = new HashMap<>();
-                record.put("smiles", output.getMoleculeSMILES());
-                record.put("id", output.getMoleculeId());
-                record.put("model", model.getInfo().getKey());
-                record.put("assessment", output.getAssessment());
+                record.put("SMILES", output.getMoleculeSMILES());
+                record.put("ID", output.getMoleculeId());
+                record.put("MODEL", model.getInfo().getKey());
+                record.put("ASSESSMENT", output.getAssessment());
 
                 String[] resultNames = model.GetResultsName();
                 Object[] resultValues = output.getResults();
                 if (resultValues != null)
                     for (int i = 0; i < resultNames.length; i++) {
-                        record.put(resultNames[i], resultValues[i]);
+                        record.put(String.format("RESULT.%s",resultNames[i]), resultValues[i]);
                     }
-
+                if (output.HasExperimental())
+                    record.put("Experimental", output.getExperimental()); 
+                record.put("MainResultValue", output.getMainResultValue()); 
+                record.put("Status", output.getStatus());     
+                if (output.getStatus() != InsilicoModelOutput.OUTPUT_OK_AD_MISSING) {
+                    record.put("ADI",output.getADI().GetIndexValueFormatted());
+                    ArrayList<iADIndex> adiValues = output.getADIndex();
+                    for (iADIndex x : adiValues) {
+                        record.put(String.format("ADI.%s",x.GetIndexName()), x.GetIndexValue());
+                    }
+                }
+                if (output.getStatus() != InsilicoModelOutput.OUTPUT_ERROR) {
+                    record.put("ERROR", output.getErrMessage()); 
+                }
                 resultWriter.writeResult(model.getInfo().getKey(), record);
                 if ((maxRows>0) & (rowNum>=maxRows)) break;
             }
