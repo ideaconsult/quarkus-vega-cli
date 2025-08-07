@@ -16,7 +16,7 @@ public class ModelRegistry {
     private static final Map<String, String> modelMap = new HashMap<>();
 
     static {
-        try (InputStream is = ModelRegistry.class.getClassLoader().getResourceAsStream("/models.txt")) {
+        try (InputStream is = ModelRegistry.class.getResourceAsStream("/models.txt")) {
             if (is == null) {
                 throw new FileNotFoundException("models.txt not found in resources");
             }
