@@ -3,13 +3,12 @@ package net.idea.wrapper.vega;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import jakarta.inject.Inject;
+import java.util.ServiceLoader;
 import net.idea.wrapper.ModelResultWriter;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +17,7 @@ import java.util.concurrent.Callable;
 import insilico.core.model.InsilicoModel;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.model.InsilicoModelOutput;
+import insilico.core.model.iInsilicoModel;
 import insilico.core.model.report.txt.ReportTXTSingle;
 import insilico.core.model.runner.InsilicoModelRunnerByMolecule;
 import insilico.core.model.runner.InsilicoModelWrapper;
@@ -49,14 +49,23 @@ public class WrapperCommand implements Callable<Integer> {
             description = "Enable fast mode (default: false)")
     boolean fastmode = false;
 
-    @Option(names = {"--list-models"}, description = "List available models", help = true)
+    @Option(names = {"-l", "--list-models"}, description = "List available models", help = true)
     boolean listModels;
         
+    public void listAll() throws Exception {
+        System.out.println("list models");
+        ServiceLoader<iInsilicoModel> loader = ServiceLoader.load(iInsilicoModel.class);
+
+        for (iInsilicoModel impl : loader) {
+            System.out.println("Discovered: " + impl.getClass().getName());
+            // impl.doSomething();
+        }
+    }
     @Override
     public Integer call() throws Exception {
         try {
             if (listModels) {
-                
+                ImplScanner.list_models();
                 return 0;
             } else {
                 if (!outputDir.exists()) {

@@ -36,8 +36,10 @@ Run with Quarkus dev mode (for testing):
 
 Or run the packaged app:
 ```shell script
-java -jar target/vega-wrapper-app-1.0.0-runner.jar -i "myInputData"
+java -jar .\target\quarkus-app\quarkus-run.jar 
 ```
+
+
 
 The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
 
