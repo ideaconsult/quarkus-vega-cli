@@ -83,23 +83,43 @@ public class WrapperCommand implements Callable<Integer> {
                 } else if (!outputDir.isDirectory()) {
                     throw new IllegalArgumentException("Provided output path is not a directory: " + outputDir.getAbsolutePath());
                 }
-
+                long startTime = System.nanoTime();
                 InsilicoModel model = ModelRegistry.getModelByKey(modelKey);
-                // InsilicoModel model = (InsilicoModel) Class.forName(classname).getDeclaredConstructor().newInstance();
+                long endTime = System.nanoTime();
+                long elapsedNano = endTime - startTime;
+                double elapsedSeconds = elapsedNano / 1_000_000_000.0;                
+                System.out.printf("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds);
+
+                int rowNum = 0;
+                if (inputGroup.inputFile == null) fastmode = false;
+                startTime = System.nanoTime();
                 if (fastmode) {
-                    return run_fast(
+                    System.out.print("Processing in fast mode ...");
+                    rowNum = run_fast(
                                 model,
                                 inputGroup.inputFile,
                                 outputDir,
                                 smilesField,
                                 idField
-                        );          
+                        );
+                    System.out.println("\nDone.");
                 } else {
                     ArrayList<InsilicoMolecule> dataset = new ArrayList<InsilicoMolecule>();
                     InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
                     dataset.add(mol);
-                    return run_vega(model , dataset, outputDir);
+                    rowNum = run_vega(model , dataset, outputDir);
                 }
+                endTime = System.nanoTime();
+                elapsedNano = endTime - startTime;
+                elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
+                if (rowNum > 0) {
+                    double avgPerRow = elapsedSeconds / rowNum;
+                    System.out.printf("Elapsed time: %.2f seconds%n", elapsedSeconds);
+                    System.out.printf("Average time per row: %.4f seconds%n", avgPerRow);
+                } else {
+                    System.out.println("No rows processed.");
+                }                
+                return rowNum>0?0:1;
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -122,10 +142,10 @@ public class WrapperCommand implements Callable<Integer> {
                 System.err.println(x);
                 
             }                
-            return 0;
+            return dataset.size();
         } catch (Exception e) {
             e.printStackTrace();
-            return 1;
+            return 0;
         }
     }
 
@@ -136,6 +156,7 @@ public class WrapperCommand implements Callable<Integer> {
             String smilesFieldName,
             String idFieldName
     ) throws Exception {
+        int rowNum = 0; 
         ModelResultWriter resultWriter = new ModelResultWriter(outputDir);
 
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
@@ -147,9 +168,11 @@ public class WrapperCommand implements Callable<Integer> {
             String[] headers = headerLine.split("\t");
             Map<String, Integer> headerIndex = new HashMap<>();
             for (int i = 0; i < headers.length; i++) {
-                System.out.println(headers[i].trim());
+                System.out.print(headers[i].trim());
+                System.out.print("\t");
                 headerIndex.put(headers[i].trim(), i);
             }
+            System.out.println();
             
             Integer smilesIndex = headerIndex.get(smilesFieldName);
             Integer idIndex = headerIndex.get(idFieldName);
@@ -159,10 +182,13 @@ public class WrapperCommand implements Callable<Integer> {
                         smilesFieldName + " or " + idFieldName);
             }
 
+   
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
-
+                rowNum++;
+                System.out.print("\rProcessed rows: " + rowNum);
+                System.out.flush();
                 String[] fields = line.split("\t", -1); // include trailing empty fields
                 if (fields.length <= Math.max(smilesIndex, idIndex)) continue;
 
@@ -182,16 +208,17 @@ public class WrapperCommand implements Callable<Integer> {
 
                 String[] resultNames = model.GetResultsName();
                 Object[] resultValues = output.getResults();
-                for (int i = 0; i < resultNames.length; i++) {
-                    record.put(resultNames[i], resultValues[i]);
-                }
+                if (resultValues != null)
+                    for (int i = 0; i < resultNames.length; i++) {
+                        record.put(resultNames[i], resultValues[i]);
+                    }
 
                 resultWriter.writeResult(model.getInfo().getKey(), record);
             }
         }
 
         resultWriter.close();
-        return 0;
+        return rowNum;
     }
 
 }
