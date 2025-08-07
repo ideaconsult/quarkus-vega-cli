@@ -17,6 +17,7 @@ import insilico.core.model.iInsilicoModel;
 import insilico.core.model.report.txt.ReportTXTSingle;
 import insilico.core.model.runner.InsilicoModelRunnerByMolecule;
 import insilico.core.model.runner.InsilicoModelWrapper;
+import insilico.core.model.runner.iInsilicoModelRunnerMessenger;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.molecule.conversion.SmilesMolecule;
 import insilico.core.molecule.conversion.file.MoleculeFileSmiles;
@@ -58,8 +59,12 @@ public class WrapperCommand implements Callable<Integer> {
             description = "Enable fast mode (default: false)")
     boolean fastmode = false;
 
+    @Option(names = {"-x", "--maxrows"}, description = "Max rows to process from file, default ALL", required = false)
+    int maxRows = -1;
+
     @Option(names = {"-l", "--list-models"}, description = "List available models", help = true)
     boolean listModels;
+
         
     public void listAll() throws Exception {
         System.out.println("list models");
@@ -96,7 +101,7 @@ public class WrapperCommand implements Callable<Integer> {
                 if (inputGroup.inputFile == null) fastmode = false;
                 startTime = System.nanoTime();
                 if (fastmode) {
-                    System.out.print("Processing in fast mode ...");
+                    System.out.println("Processing in fast mode ...");
                     rowNum = run_fast(
                                 model,
                                 inputGroup.inputFile,
@@ -124,7 +129,9 @@ public class WrapperCommand implements Callable<Integer> {
                         SMIReader.OpenFile(inputGroup.inputFile.getAbsolutePath());
                         dataset = SMIReader.ReadAll();
                         SMIReader.CloseFile();                        
+                        System.out.println("Loaded  "+ inputGroup.inputFile);
                     }
+                    
                     rowNum = run_vega(model , dataset, outputDir);
                 }
                 endTime = System.nanoTime();
@@ -146,13 +153,33 @@ public class WrapperCommand implements Callable<Integer> {
     }
 
     private int run_vega( InsilicoModel model, ArrayList<InsilicoMolecule> dataset, File outputDir) throws Exception {
+        
         try {
             try { 
                 InsilicoModelRunnerByMolecule runner = new InsilicoModelRunnerByMolecule();
+                // Messenger for progress bar
+                iInsilicoModelRunnerMessenger Messenger = new iInsilicoModelRunnerMessenger() {
+                    int rowNum = 0;
+                    @Override
+                    public void SendMessage(String msg) {
+                        System.out.printf("%s\n", msg);
+                        System.out.flush();
+                    }
+
+                    @Override
+                    public void UpdateProgress() {
+                        rowNum++;
+                        System.out.print("\rProcessed rows: " + rowNum);
+                        System.out.flush();
+                    } 
+                };
+                runner.setMessenger(Messenger);                
                 runner.AddModel(model);
+                runner.getMessenger().SendMessage("Processing...");
                 runner.Run(dataset);
                 for (InsilicoModelWrapper curModel : runner.GetModelWrappers()) {
                     File outputFile = new File(outputDir, "report_" + model.getInfo().getKey()  + ".txt");
+                    System.out.println("Writing to  "+ outputFile);                    
                     ReportTXTSingle.PrintReport(dataset, curModel, new PrintWriter(outputFile));
                 }
 
@@ -176,8 +203,9 @@ public class WrapperCommand implements Callable<Integer> {
     ) throws Exception {
         int rowNum = 0; 
         ModelResultWriter resultWriter = new ModelResultWriter(outputDir);
-
+        // InsilicoModelRunnerByMolecule runner = new InsilicoModelRunnerByMolecule();
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            System.out.println("Reading "+ inputFile);
             String headerLine = reader.readLine();
             if (headerLine == null) {
                 throw new IOException("Input file is empty.");
@@ -199,7 +227,7 @@ public class WrapperCommand implements Callable<Integer> {
                 throw new IllegalArgumentException("Missing required fields: " +
                         smilesFieldName + " or " + idFieldName);
             }
-
+            System.out.println("Writing to  "+ outputDir);
    
             String line;
             while ((line = reader.readLine()) != null) {
@@ -218,6 +246,7 @@ public class WrapperCommand implements Callable<Integer> {
 
                 InsilicoMolecule mol = SmilesMolecule.Convert(smiles); 
                 mol.SetId(id);
+                // runner.Run(mol);
                 InsilicoModelOutput output = model.Execute(mol);
 
                 Map<String, Object> record = new HashMap<>();
@@ -234,6 +263,7 @@ public class WrapperCommand implements Callable<Integer> {
                     }
 
                 resultWriter.writeResult(model.getInfo().getKey(), record);
+                if ((maxRows>0) & (rowNum>=maxRows)) break;
             }
         }
 
