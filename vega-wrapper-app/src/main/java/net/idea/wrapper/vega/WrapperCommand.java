@@ -1,27 +1,28 @@
 package net.idea.wrapper.vega;
 
-import picocli.CommandLine.ArgGroup;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import java.util.ServiceLoader;
-import net.idea.wrapper.ModelResultWriter;
-
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.Callable;
 
 import insilico.core.model.InsilicoModel;
-import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.model.InsilicoModelOutput;
 import insilico.core.model.iInsilicoModel;
 import insilico.core.model.report.txt.ReportTXTSingle;
 import insilico.core.model.runner.InsilicoModelRunnerByMolecule;
 import insilico.core.model.runner.InsilicoModelWrapper;
+import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.molecule.conversion.SmilesMolecule;
+import net.idea.wrapper.ModelResultWriter;
+import picocli.CommandLine.ArgGroup;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 
 
 @Command(name = "vega", mixinStandardHelpOptions = true,
@@ -35,9 +36,16 @@ public class WrapperCommand implements Callable<Integer> {
         @Option(names = {"-i", "--input"}, description = "Path to input SMILES or .txt file")
         File inputFile;
     }
+    
 
     @ArgGroup(exclusive = true, multiplicity = "1")
     InputGroup inputGroup;
+
+    @Option(names = {"--smilesfield"}, description = "Name of the column with SMILES")
+    String smilesField;
+
+    @Option(names = {"--idfield"}, description = "Name of the column with molecule ID")
+    String idField;    
 
     @Option(names = {"-m", "--model"}, description = "Model key", required = true)
     String modelKey;
@@ -65,7 +73,7 @@ public class WrapperCommand implements Callable<Integer> {
     public Integer call() throws Exception {
         try {
             if (listModels) {
-                ImplScanner.list_models();
+                ImplScanner.list_models(false, outputDir);
                 return 0;
             } else {
                 if (!outputDir.exists()) {
@@ -76,16 +84,22 @@ public class WrapperCommand implements Callable<Integer> {
                     throw new IllegalArgumentException("Provided output path is not a directory: " + outputDir.getAbsolutePath());
                 }
 
-                ArrayList<InsilicoMolecule> dataset = new ArrayList<InsilicoMolecule>();
-                InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
-                dataset.add(mol);
-
-                String classname = "insilico.bcf_meylan.ismBCFMeylan";
-                InsilicoModel model = (InsilicoModel) Class.forName(classname).getDeclaredConstructor().newInstance();
-                if (fastmode)
-                    return run_fast(model , dataset, outputDir);            
-                else
-                    return run_vega(model , dataset, outputDir);            
+                InsilicoModel model = ModelRegistry.getModelByKey(modelKey);
+                // InsilicoModel model = (InsilicoModel) Class.forName(classname).getDeclaredConstructor().newInstance();
+                if (fastmode) {
+                    return run_fast(
+                                model,
+                                inputGroup.inputFile,
+                                outputDir,
+                                smilesField,
+                                idField
+                        );          
+                } else {
+                    ArrayList<InsilicoMolecule> dataset = new ArrayList<InsilicoMolecule>();
+                    InsilicoMolecule mol = SmilesMolecule.Convert(inputGroup.smiles.trim());
+                    dataset.add(mol);
+                    return run_vega(model , dataset, outputDir);
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -115,31 +129,69 @@ public class WrapperCommand implements Callable<Integer> {
         }
     }
 
-    private int run_fast( InsilicoModel model, ArrayList<InsilicoMolecule> dataset, File outputDir) throws Exception {
+    private int run_fast(
+            InsilicoModel model,
+            File inputFile,
+            File outputDir,
+            String smilesFieldName,
+            String idFieldName
+    ) throws Exception {
         ModelResultWriter resultWriter = new ModelResultWriter(outputDir);
 
-        for (InsilicoMolecule mol : dataset) {
-            InsilicoModelOutput output = model.Execute(mol);
-                
-            // Prepare JSON record for this molecule and model
-            Map<String, Object> record = new HashMap<>();
-            record.put("smiles", output.getMoleculeSMILES());
-            record.put("id", output.getMoleculeId());
-            record.put("model", model.getInfo().getKey());
-            record.put("assessment", output.getAssessment());
-            String[] results = model.GetResultsName();            
-            for(int nCols = 0; nCols < output.getResults().length; ++nCols) {
-                  record.put(results[nCols],  output.getResults()[nCols]);
-               }            
-             /*
-            for (String var : model.GetADItemsName())    
-                record.put(var, model.getResultsAsMap());
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String headerLine = reader.readLine();
+            if (headerLine == null) {
+                throw new IOException("Input file is empty.");
+            }
 
-            record.put("results", model.getResultsAsMap()); // assuming a method like this
-                */  
-            resultWriter.writeResult(model.getInfo().getKey(), record);
+            String[] headers = headerLine.split("\t");
+            Map<String, Integer> headerIndex = new HashMap<>();
+            for (int i = 0; i < headers.length; i++) {
+                System.out.println(headers[i].trim());
+                headerIndex.put(headers[i].trim(), i);
+            }
+            
+            Integer smilesIndex = headerIndex.get(smilesFieldName);
+            Integer idIndex = headerIndex.get(idFieldName);
+
+            if (smilesIndex == null || idIndex == null) {
+                throw new IllegalArgumentException("Missing required fields: " +
+                        smilesFieldName + " or " + idFieldName);
+            }
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+
+                String[] fields = line.split("\t", -1); // include trailing empty fields
+                if (fields.length <= Math.max(smilesIndex, idIndex)) continue;
+
+                String smiles = fields[smilesIndex];
+                String id = fields[idIndex];
+
+
+                InsilicoMolecule mol = SmilesMolecule.Convert(smiles); 
+                mol.SetId(id);
+                InsilicoModelOutput output = model.Execute(mol);
+
+                Map<String, Object> record = new HashMap<>();
+                record.put("smiles", output.getMoleculeSMILES());
+                record.put("id", output.getMoleculeId());
+                record.put("model", model.getInfo().getKey());
+                record.put("assessment", output.getAssessment());
+
+                String[] resultNames = model.GetResultsName();
+                Object[] resultValues = output.getResults();
+                for (int i = 0; i < resultNames.length; i++) {
+                    record.put(resultNames[i], resultValues[i]);
+                }
+
+                resultWriter.writeResult(model.getInfo().getKey(), record);
+            }
         }
+
         resultWriter.close();
         return 0;
     }
+
 }
