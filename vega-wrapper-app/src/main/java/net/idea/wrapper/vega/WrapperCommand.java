@@ -70,7 +70,7 @@ public class WrapperCommand implements Callable<Integer> {
     @Option(names = {"-m", "--model"}, description = "Model key (see --list-models) or file with model keys", required = true)
     String modelKey;
 
-    @Option(names = {"-o", "--output"}, description = "Output report folder", required = true)
+    @Option(names = {"-o", "--output"}, description = "Output report folder, or output file if -l", required = true)
     File outputDir;
 
     @Option(names = {"-f", "--fastmode"},
@@ -78,7 +78,7 @@ public class WrapperCommand implements Callable<Integer> {
     boolean fastmode = false;
 
     @Option(names = {"-j", "--jsonl"},
-    description = "Write original txt format in fastmode (otherwise jsonl)")
+    description = "Write resultw_MODEL.jsonl instead of original resultw_MODEL.txt format in fastmode")
     boolean jsonl = false;
 
     @Option(names = {"-z", "--reinicialize-model"},
