@@ -291,9 +291,7 @@ public class WrapperCommand implements Callable<Integer> {
     ) throws Exception {
         int rowNum = 0; 
         ModelResultWriter resultWriter = null;
-        InsilicoModelMultiWriter txtWriter = null;
-        if (originalFormat) txtWriter = new InsilicoModelMultiWriter(outputDir); 
-        else resultWriter = new ModelResultWriter(outputDir);
+        resultWriter = new ModelResultWriter(outputDir, ! originalFormat);
 
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
             System.out.println("Reading "+ inputFile);
@@ -313,7 +311,7 @@ public class WrapperCommand implements Callable<Integer> {
             
             Integer smilesIndex = headerIndex.get(smilesFieldName);
             Integer idIndex = headerIndex.get(idFieldName);
-            System.out.println("idIndex" + idIndex);
+            
             if (idIndex == null) idIndex = -1;
 
             if (smilesIndex == null) {
@@ -355,13 +353,11 @@ public class WrapperCommand implements Callable<Integer> {
                     else
                         mol.SetId(String.format("%d",rowNum));                 
                     InsilicoModelOutput output = model.Execute(mol);
-                    if (originalFormat)
-                        txtWriter.writeResult(rowNum, model, output , mol);
-                    else {
-                        record = output2record(model, output);
-                        resultWriter.writeResult(modelKey, record);
-                    }
+                    record = ModelResultWriter.toRecord(rowNum, output,mol, model);
+                    resultWriter.writeResult(model, record, rowNum);
+
                 } catch (Exception x) {
+                    x.printStackTrace();
                     /*
                     record = new HashMap<>();  
                     record.put("ERROR", x.getMessage()); 
@@ -369,7 +365,7 @@ public class WrapperCommand implements Callable<Integer> {
                     record.put("ID", idIndex);
                     record.put("MODEL", model.getInfo().getKey());
                     record.put("Status", -1);                     
-                     */
+
                     if (originalFormat)
                         txtWriter.writeResult(rowNum, model, null , mol);
                     else {
@@ -381,13 +377,13 @@ public class WrapperCommand implements Callable<Integer> {
                         record.put("Status", -1);
                         resultWriter.writeResult(modelKey, record);
                     }
+                                             */
                 }                    
                 // resultWriter.writeResult(model.getInfo().getKey(), record);
                 if ((maxRows>0) & (rowNum>=maxRows)) break;
             }
         }
-        if (originalFormat) txtWriter.close();
-        else resultWriter.close();
+        resultWriter.close();
         return rowNum;
     }
 
