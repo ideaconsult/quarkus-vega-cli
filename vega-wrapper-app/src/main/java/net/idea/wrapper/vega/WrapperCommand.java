@@ -6,7 +6,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -263,10 +262,11 @@ public class WrapperCommand implements Callable<Integer> {
             
             Integer smilesIndex = headerIndex.get(smilesFieldName);
             Integer idIndex = headerIndex.get(idFieldName);
+            if (idIndex == null) idIndex = -1;
 
-            if (smilesIndex == null || idIndex == null) {
-                throw new IllegalArgumentException("Missing required fields: " +
-                        smilesFieldName + " or " + idFieldName);
+            if (smilesIndex == null) {
+                throw new IllegalArgumentException("Missing required field: " +
+                        smilesFieldName );
             }
             System.out.println("Writing to  "+ outputDir);
    
@@ -293,40 +293,57 @@ public class WrapperCommand implements Callable<Integer> {
                 if (fields.length <= Math.max(smilesIndex, idIndex)) continue;
 
                 String smiles = fields[smilesIndex];
-                String id = fields[idIndex];
+                InsilicoMolecule mol = null;
+                Map<String, Object> record = new HashMap<>();                
+                try {
+                    mol = SmilesMolecule.Convert(smiles); 
+                    // will throw exception on invalid structure
+                    // mol.GetStructure();
+                    if (idIndex != null)
+                        mol.SetId(String.format("%d",idIndex));                    
 
+                    // runner.Run(mol);
+                    InsilicoModelOutput output = model.Execute(mol);
 
-                InsilicoMolecule mol = SmilesMolecule.Convert(smiles); 
-                mol.SetId(id);
-                // runner.Run(mol);
-                InsilicoModelOutput output = model.Execute(mol);
+                    record.put("SMILES", output.getMoleculeSMILES());
+                    record.put("ID", output.getMoleculeId());
+                    record.put("MODEL", model.getInfo().getKey());
+                    record.put("ASSESSMENT", output.getAssessment());
 
-                Map<String, Object> record = new HashMap<>();
-                record.put("SMILES", output.getMoleculeSMILES());
-                record.put("ID", output.getMoleculeId());
-                record.put("MODEL", model.getInfo().getKey());
-                record.put("ASSESSMENT", output.getAssessment());
+                    String[] resultNames = model.GetResultsName();
+                    Object[] resultValues = output.getResults();
+                    if (resultValues != null)
+                        for (int i = 0; i < resultNames.length; i++) {
+                            record.put(String.format("RESULT.%s",resultNames[i]), resultValues[i]);
+                        }
+                    if (output.HasExperimental())
+                        record.put("Experimental", output.getExperimental()); 
 
-                String[] resultNames = model.GetResultsName();
-                Object[] resultValues = output.getResults();
-                if (resultValues != null)
-                    for (int i = 0; i < resultNames.length; i++) {
-                        record.put(String.format("RESULT.%s",resultNames[i]), resultValues[i]);
+                    
+                    record.put("Status", output.getStatus());  
+                    if (output.getStatus() == InsilicoModelOutput.OUTPUT_ERROR
+                            || output.getStatus() == InsilicoModelOutput.OUTPUT_NOT_CALCULATED)
+                        record.put("ERROR", output.getErrMessage()); 
+                    else {
+                        record.put("MainResultValue", output.getMainResultValue());       
+                        if (output.getStatus() != InsilicoModelOutput.OUTPUT_OK_AD_MISSING) {
+                            
+                            if (output.getADI()!=null)
+                                record.put("ADI",output.getADI().GetIndexValueFormatted());
+                            ArrayList<iADIndex> adiValues = output.getADIndex();
+                            for (iADIndex x : adiValues) {
+                                record.put(String.format("ADI.%s",x.GetIndexName()), x.GetIndexValue());
+                            }
+                        }
                     }
-                if (output.HasExperimental())
-                    record.put("Experimental", output.getExperimental()); 
-                record.put("MainResultValue", output.getMainResultValue()); 
-                record.put("Status", output.getStatus());     
-                if (output.getStatus() != InsilicoModelOutput.OUTPUT_OK_AD_MISSING) {
-                    record.put("ADI",output.getADI().GetIndexValueFormatted());
-                    ArrayList<iADIndex> adiValues = output.getADIndex();
-                    for (iADIndex x : adiValues) {
-                        record.put(String.format("ADI.%s",x.GetIndexName()), x.GetIndexValue());
-                    }
-                }
-                if (output.getStatus() != InsilicoModelOutput.OUTPUT_ERROR) {
-                    record.put("ERROR", output.getErrMessage()); 
-                }
+          
+                } catch (Exception x) {
+                    record.put("ERROR", x.getMessage()); 
+                    record.put("SMILES", smiles);
+                    record.put("ID", idIndex);
+                    record.put("MODEL", model.getInfo().getKey());
+                    record.put("Status", -1);                     
+                }                    
                 resultWriter.writeResult(model.getInfo().getKey(), record);
                 if ((maxRows>0) & (rowNum>=maxRows)) break;
             }
