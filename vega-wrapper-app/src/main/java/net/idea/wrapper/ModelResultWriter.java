@@ -33,14 +33,32 @@ public class ModelResultWriter {
         this.jsonl = jsonl;
     }
 
+    private File getUniqueFile(String baseName, String ext) {
+        File file = new File(outputDir, baseName + ext);
+        if (!file.exists()) {
+            return file;
+        }
+
+        int counter = 1;
+        File altFile;
+        do {
+            altFile = new File(outputDir, baseName + "_" + counter + ext);
+            counter++;
+        } while (altFile.exists());
+        return altFile;
+    }
+
     public void writeResult(InsilicoModel model, Map<String, Object> resultRecord, int index) throws IOException {
         String modelName = model.getInfo().getKey();
         BufferedWriter writer = writers.get(modelName);
         if (writer == null) {
-            File file = new File(outputDir, "results_" + modelName + (this.jsonl?".jsonl":".txt"));
-            writer = new BufferedWriter(new FileWriter(file, true));
+            String ext = this.jsonl ? ".jsonl" : ".txt";
+            String baseName = "results_" + modelName;
+            File file = getUniqueFile(baseName, ext);
+
+            writer = new BufferedWriter(new FileWriter(file, false));
             writers.put(modelName, writer);
-        }
+        }        
         if (this.jsonl) {
             String jsonLine = mapper.writeValueAsString(resultRecord);
             writer.write(jsonLine);

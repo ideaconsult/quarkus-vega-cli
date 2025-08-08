@@ -213,7 +213,7 @@ public class WrapperCommand implements Callable<Integer> {
                     public void UpdateProgress() {
                         rowNum++;
                         System.out.print("\rProcessed rows: " + rowNum);
-                        if (rowNum % 50 == 0) {
+                        if (rowNum % 100 == 0) {
                             printMemoryUsage();
                         }
                         System.out.flush();
@@ -324,10 +324,8 @@ public class WrapperCommand implements Callable<Integer> {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
-                rowNum++;
-                if (rowNum % 100 == 0) {
-                    printMemoryUsage();
-                }
+
+                rowNum++;                
                 if (reinicializeModel > 2) {    
                     if (rowNum % reinicializeModel == 0) {
                         System.out.print("\nReinitialize Model at: " + rowNum+"\n");
@@ -338,6 +336,10 @@ public class WrapperCommand implements Callable<Integer> {
                     }
                 }                  
                 System.out.print("\rProcessed rows: " + rowNum);
+                if (rowNum % 100 == 0) {
+                    printMemoryUsage();
+                }                
+                
                 System.out.flush();
                 //}                
                 String[] fields = line.split("\t", -1); // include trailing empty fields
