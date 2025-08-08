@@ -53,7 +53,7 @@ public class ModelResultWriter {
         BufferedWriter writer = writers.get(modelName);
         if (writer == null) {
             String ext = this.jsonl ? ".jsonl" : ".txt";
-            String baseName = "results_" + modelName;
+            String baseName = "resultsw_" + modelName;
             File file = getUniqueFile(baseName, ext);
 
             writer = new BufferedWriter(new FileWriter(file, false));

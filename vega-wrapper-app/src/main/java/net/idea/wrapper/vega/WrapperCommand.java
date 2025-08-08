@@ -32,15 +32,22 @@ import insilico.core.molecule.conversion.SmilesMolecule;
 import insilico.core.molecule.conversion.file.MoleculeFileSmiles;
 
 import net.idea.wrapper.ModelResultWriter;
+import net.idea.wrapper.StreamingMeanLong;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Command(name = "vega", mixinStandardHelpOptions = true,
          description = "Wraps the VEGA-GUI.jar functionality")
 public class WrapperCommand implements Callable<Integer> {
+    // Create a logger for this class
+    private static final Logger logger = Logger.getLogger(WrapperCommand.class.getName());
+
+    StreamingMeanLong freeMemory = new StreamingMeanLong();
+    StreamingMeanLong usedMemory = new StreamingMeanLong();
 
     static class InputGroup {
         @Option(names = {"-s", "--smiles"}, description = "Input SMILES")
@@ -86,15 +93,32 @@ public class WrapperCommand implements Callable<Integer> {
 
         
     public void listAll() throws Exception {
-        System.out.println("list models");
+        logger.info("list models");
         ServiceLoader<iInsilicoModel> loader = ServiceLoader.load(iInsilicoModel.class);
 
         for (iInsilicoModel impl : loader) {
-            System.out.println("Discovered: " + impl.getClass().getName());
+            logger.info("Discovered: " + impl.getClass().getName());
             // impl.doSomething();
         }
     }
+    public void printMemoryUsage() {
+        printMemoryUsage(true);
+    }
+    public void printMemoryUsage(boolean print) {
+        Runtime runtime = Runtime.getRuntime();
+        long totalMemory = runtime.totalMemory();
+        long _freeMemory = runtime.freeMemory();
+        long _usedMemory = totalMemory - _freeMemory;
+        if (print)
+        logger.info(
+            String.format("Free memory: %d MB, Used memory: %d MB%n",
+            _freeMemory / (1024 * 1024),
+            _usedMemory / (1024 * 1024)
+        ));
+        this.usedMemory.add(_usedMemory / (1024 * 1024));
+        this.freeMemory.add(_freeMemory / (1024 * 1024));
 
+    }
     protected int runModel(String modelKey) throws Exception {
         try {
             long startTime = System.nanoTime();
@@ -102,13 +126,13 @@ public class WrapperCommand implements Callable<Integer> {
             long endTime = System.nanoTime();
             long elapsedNano = endTime - startTime;
             double elapsedSeconds = elapsedNano / 1_000_000_000.0;                
-            System.out.printf("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds);
+            logger.log(Level.FINE, String.format("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds));
 
             int rowNum = 0;
             if (inputGroup.inputFile == null) fastmode = false;
             startTime = System.nanoTime();
             if (fastmode) {
-                System.out.printf("Processing %s in fast mode ...", modelKey);
+                logger.info(String.format("Processing %s in fast mode ...", modelKey));
                 rowNum = run_fast(
                             model,
                             inputGroup.inputFile,
@@ -117,7 +141,7 @@ public class WrapperCommand implements Callable<Integer> {
                             idField,
                             !jsonl
                     );
-                System.out.println("\nDone.");
+                logger.info("Done.");
             } else {
                 ArrayList<InsilicoMolecule> dataset = null;
                 if (inputGroup.smiles != null) {
@@ -129,7 +153,7 @@ public class WrapperCommand implements Callable<Integer> {
                         inputGroup.inputFile, smilesField, idField);
                     int smilesPos = positions[0];
                     int idPos = positions[1]; // can be -1   
-                    System.out.printf("%s %d %s %d", smilesField, smilesPos,idField, idPos);
+                    logger.log(Level.FINE,String.format("%s %d %s %d", smilesField, smilesPos,idField, idPos));
                     MoleculeFileSmiles SMIReader = new MoleculeFileSmiles();
                     SMIReader.setCASField(-1);
                     SMIReader.setIdField(idPos);
@@ -137,7 +161,7 @@ public class WrapperCommand implements Callable<Integer> {
                     SMIReader.OpenFile(inputGroup.inputFile.getAbsolutePath());
                     dataset = SMIReader.ReadAll();
                     SMIReader.CloseFile();                        
-                    System.out.println("Loaded  "+ inputGroup.inputFile);
+                    logger.log(Level.FINE,"Loaded  "+ inputGroup.inputFile);
                 }
                 
                 rowNum = run_vega(model , dataset, outputDir);
@@ -147,12 +171,19 @@ public class WrapperCommand implements Callable<Integer> {
             elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
             if (rowNum > 0) {
                 double avgPerRow = elapsedSeconds / rowNum;
-                System.out.printf("[%s] Elapsed time: %.2f seconds%n\n", model.getInfo().getKey(), elapsedSeconds);
-                System.out.printf("Average time per row: %.4f seconds%n", avgPerRow);
+                logger.info(String.format("[%s] Elapsed time: %.2f seconds%n", model.getInfo().getKey(), elapsedSeconds));
+                logger.info(String.format("[%s] Average time per row: %.4f seconds%n",model.getInfo().getKey(), avgPerRow));
             } else {
-                System.out.println("No rows processed.");
+                logger.log(Level.WARNING,"No rows processed.");
             }         
-            printMemoryUsage();       
+            if (this.freeMemory.getCount()==0)
+                printMemoryUsage(false);
+            logger.info(String.format(
+            "[%s] Average Free memory: %d MB, Average Used memory: %d MB%n",
+            model.getInfo().getKey(),
+            this.freeMemory.getMean(),
+            this.usedMemory.getMean()
+            ));
             return rowNum>0?0:1;
         }  catch (Exception x) {
             throw x;
@@ -178,10 +209,10 @@ public class WrapperCommand implements Callable<Integer> {
                     List<String> model_keys = readKeys(file_models.toPath());
                     int rownum = 0;
                     for (String model_key:model_keys) try {
-                        System.out.println(model_key);
+                        logger.info(model_key);
                         rownum += runModel(model_key.trim());
                     } catch (Exception x) {
-                        System.err.println(String.format("%s %s", model_key, x.getMessage()));
+                        logger.severe(String.format("%s %s", model_key, x.getMessage()));
                     }
                     return rownum;
                 } else {    
@@ -190,7 +221,7 @@ public class WrapperCommand implements Callable<Integer> {
 
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.severe(e.getMessage());
             return 1;
         }
     }
@@ -205,7 +236,7 @@ public class WrapperCommand implements Callable<Integer> {
                     int rowNum = 0;
                     @Override
                     public void SendMessage(String msg) {
-                        System.out.printf("%s\n", msg);
+                        System.out.printf("%s", msg);
                         System.out.flush();
                     }
 
@@ -226,17 +257,17 @@ public class WrapperCommand implements Callable<Integer> {
                 runner.Run(dataset);
                 for (InsilicoModelWrapper curModel : runner.GetModelWrappers()) {
                     File outputFile = new File(outputDir, "report_" + model.getInfo().getKey()  + ".txt");
-                    System.out.println("Writing to  "+ outputFile);                    
+                    logger.info("Writing to  "+ outputFile);                    
                     ReportTXTSingle.PrintReport(dataset, curModel, new PrintWriter(outputFile));
                 }
 
             } catch (Exception x) {
-                System.err.println(x);
+                logger.severe(x.getMessage());
                 
             }                
             return dataset.size();
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.severe(e.getMessage());
             return 0;
         }
     }
@@ -294,7 +325,7 @@ public class WrapperCommand implements Callable<Integer> {
         resultWriter = new ModelResultWriter(outputDir, ! originalFormat);
 
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
-            System.out.println("Reading "+ inputFile);
+            logger.info("Reading "+ inputFile);
             String headerLine = reader.readLine();
             if (headerLine == null) {
                 throw new IOException("Input file is empty.");
@@ -302,12 +333,13 @@ public class WrapperCommand implements Callable<Integer> {
 
             String[] headers = headerLine.split("\t");
             Map<String, Integer> headerIndex = new HashMap<>();
+            StringBuilder _log= new StringBuilder();
             for (int i = 0; i < headers.length; i++) {
-                System.out.print(headers[i].trim());
-                System.out.print("\t");
+                _log.append(headers[i].trim());
+                _log.append("\t" );
                 headerIndex.put(headers[i].trim(), i);
             }
-            System.out.println();
+            logger.info(_log.toString());
             
             Integer smilesIndex = headerIndex.get(smilesFieldName);
             Integer idIndex = headerIndex.get(idFieldName);
@@ -318,7 +350,7 @@ public class WrapperCommand implements Callable<Integer> {
                 throw new IllegalArgumentException("Missing required field: " +
                         smilesFieldName );
             }
-            System.out.println(String.format("Writing results_%s%s to %s",
+            logger.info(String.format("Writing results_%s%s to %s",
             model.getInfo().getKey(),jsonl?".jsonl":".txt",outputDir));
    
             String line;
@@ -328,14 +360,14 @@ public class WrapperCommand implements Callable<Integer> {
                 rowNum++;                
                 if (reinicializeModel > 2) {    
                     if (rowNum % reinicializeModel == 0) {
-                        System.out.print("\nReinitialize Model at: " + rowNum+"\n");
+                        logger.info("Reinitialize Model at: " + rowNum);
                         Class cls = model.getClass();
                         model = null;
                         model = (InsilicoModel) cls.getDeclaredConstructor().newInstance();
                         printMemoryUsage();
                     }
                 }                  
-                System.out.print("\rProcessed rows: " + rowNum);
+                System.out.print("\rProcessed rows: " + rowNum + " ");
                 if (rowNum % 100 == 0) {
                     printMemoryUsage();
                 }                
@@ -359,7 +391,7 @@ public class WrapperCommand implements Callable<Integer> {
                     resultWriter.writeResult(model, record, rowNum);
 
                 } catch (Exception x) {
-                    x.printStackTrace();
+                    logger.severe(x.getMessage());
                     /*
                     record = new HashMap<>();  
                     record.put("ERROR", x.getMessage()); 
@@ -404,21 +436,11 @@ public class WrapperCommand implements Callable<Integer> {
         }
     }
 
-    public static void printMemoryUsage() {
-        Runtime runtime = Runtime.getRuntime();
-        long totalMemory = runtime.totalMemory();
-        long freeMemory = runtime.freeMemory();
-        long usedMemory = totalMemory - freeMemory;
-        System.out.printf(
-            "Free memory: %d MB, Used memory: %d MB%n\n",
-            freeMemory / (1024 * 1024),
-            usedMemory / (1024 * 1024)
-        );
-    }
+
 
     public static List<String> readKeys(Path filePath) throws IOException {
         if (!Files.exists(filePath)) {
-            System.err.println("File not found: " + filePath);
+            logger.warning("File not found: " + filePath);
             return Collections.emptyList();
         }
 
