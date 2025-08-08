@@ -5,15 +5,20 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
+
+import com.ibm.icu.text.CharsetDetector;
 
 import insilico.core.ad.item.iADIndex;
 import insilico.core.model.InsilicoModel;
@@ -63,6 +68,10 @@ public class WrapperCommand implements Callable<Integer> {
     @Option(names = {"-f", "--fastmode"},
             description = "Enable fast mode (default: false)")
     boolean fastmode = false;
+
+    @Option(names = {"-z", "--reinicialize-model"},
+            description = "Reinitialize model on every N rows. Default -1 (do not reinitialize)")
+     private int reinicializeModel=-1;
 
     @Option(names = {"-x", "--maxrows"}, description = "Max rows to process from file, default ALL", required = false)
     int maxRows = -1;
@@ -136,7 +145,8 @@ public class WrapperCommand implements Callable<Integer> {
                 System.out.printf("Average time per row: %.4f seconds%n", avgPerRow);
             } else {
                 System.out.println("No rows processed.");
-            }                
+            }         
+            printMemoryUsage();       
             return rowNum>0?0:1;
         }  catch (Exception x) {
             throw x;
@@ -158,14 +168,14 @@ public class WrapperCommand implements Callable<Integer> {
                     throw new IllegalArgumentException("Provided output path is not a directory: " + outputDir.getAbsolutePath());
                 }
                 File file_models = new File(modelKey);
-                if (file_models.exists()) {
-                    List<String> model_keys = Files.lines(file_models.toPath(), StandardCharsets.UTF_8)
-                                .skip(1)
-                                .map(line -> line.split("\t")[0])
-                                .collect(Collectors.toList());                   
+                if (file_models.exists()) { 
+                    List<String> model_keys = readKeys(file_models.toPath());
                     int rownum = 0;
-                    for (String model_key:model_keys) {
-                        rownum += runModel(model_key);
+                    for (String model_key:model_keys) try {
+                        System.out.println(model_key);
+                        rownum += runModel(model_key.trim());
+                    } catch (Exception x) {
+                        System.err.println(String.format("%s %s", model_key, x.getMessage()));
                     }
                     return rownum;
                 } else {    
@@ -197,7 +207,11 @@ public class WrapperCommand implements Callable<Integer> {
                     public void UpdateProgress() {
                         rowNum++;
                         System.out.print("\rProcessed rows: " + rowNum);
+                        if (rowNum % 100 == 0) {
+                            printMemoryUsage();
+                        }
                         System.out.flush();
+                        
                     } 
                 };
                 runner.setMessenger(Messenger);                
@@ -260,7 +274,18 @@ public class WrapperCommand implements Callable<Integer> {
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
                 rowNum++;
-                //if (rowNum % 2 == 0) {
+                if (rowNum % 100 == 0) {
+                    printMemoryUsage();
+                }
+                if (reinicializeModel > 2) {    
+                    if (rowNum % reinicializeModel == 0) {
+                        System.out.print("\nReinitialize Model at: " + rowNum+"\n");
+                        Class cls = model.getClass();
+                        model = null;
+                        model = (InsilicoModel) cls.getDeclaredConstructor().newInstance();
+                        printMemoryUsage();
+                    }
+                }                  
                 System.out.print("\rProcessed rows: " + rowNum);
                 System.out.flush();
                 //}                
@@ -326,4 +351,42 @@ public class WrapperCommand implements Callable<Integer> {
         }
     }
 
+    public static void printMemoryUsage() {
+        Runtime runtime = Runtime.getRuntime();
+
+        long maxMemory = runtime.maxMemory();
+        long totalMemory = runtime.totalMemory();
+        long freeMemory = runtime.freeMemory();
+        long usedMemory = totalMemory - freeMemory;
+        System.out.printf(
+            " Max memory: %d MB, Total memory: %d MB, Free memory: %d MB, Used memory: %d MB%n\n",
+            maxMemory / (1024 * 1024),
+            totalMemory / (1024 * 1024),
+            freeMemory / (1024 * 1024),
+            usedMemory / (1024 * 1024)
+        );
+    }
+
+    public static List<String> readKeys(Path filePath) throws IOException {
+        if (!Files.exists(filePath)) {
+            System.err.println("File not found: " + filePath);
+            return Collections.emptyList();
+        }
+
+        // Read all bytes from the file
+        byte[] fileBytes = Files.readAllBytes(filePath);
+
+        // Use CharsetDetector to detect the most likely encoding
+        CharsetDetector detector = new CharsetDetector();
+        detector.setText(fileBytes);
+        
+        // Get the best match for the encoding
+        String detectedEncoding = detector.detect().getName();
+
+        // Read the file using the detected encoding
+        return Files.lines(filePath, Charset.forName(detectedEncoding))
+                    .skip(1)
+                    .map(line -> line.split("\t")[0])
+                    .collect(Collectors.toList());
+    }
 }
