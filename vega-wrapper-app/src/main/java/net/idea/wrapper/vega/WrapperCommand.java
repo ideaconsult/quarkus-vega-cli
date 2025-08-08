@@ -30,7 +30,7 @@ import insilico.core.model.runner.iInsilicoModelRunnerMessenger;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.molecule.conversion.SmilesMolecule;
 import insilico.core.molecule.conversion.file.MoleculeFileSmiles;
-import net.idea.wrapper.InsilicoModelMultiWriter;
+
 import net.idea.wrapper.ModelResultWriter;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
@@ -350,7 +350,7 @@ public class WrapperCommand implements Callable<Integer> {
                 Map<String, Object> record = null;                
                 try {
                     mol = SmilesMolecule.Convert(smiles); 
-                    if (idIndex != null)
+                    if (idIndex != null & idIndex>=0)
                         mol.SetId(String.format("%s",fields[idIndex]));   
                     else
                         mol.SetId(String.format("%d",rowNum));                 
