@@ -68,6 +68,9 @@
         <artifactId>quarkus-maven-plugin</artifactId>
         <version>${quarkus.platform.version}</version>
         <extensions>true</extensions>
+        <configuration>
+          <includeResources>${quarkus.package.type == 'uber-jar'}</includeResources>
+        </configuration>        
         <executions>
           <execution>
             <goals>
