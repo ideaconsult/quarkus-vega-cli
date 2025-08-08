@@ -171,15 +171,14 @@ public class WrapperCommand implements Callable<Integer> {
             elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
             if (rowNum > 0) {
                 double avgPerRow = elapsedSeconds / rowNum;
-                logger.info(String.format("[%s] Elapsed time: %.2f seconds%n", model.getInfo().getKey(), elapsedSeconds));
-                logger.info(String.format("[%s] Average time per row: %.4f seconds%n",model.getInfo().getKey(), avgPerRow));
+                logger.info(String.format("[%s] Elapsed time: %.2f seconds Average time per row: %.4f seconds", model.getInfo().getKey(), elapsedSeconds, avgPerRow));
             } else {
                 logger.log(Level.WARNING,"No rows processed.");
             }         
             if (this.freeMemory.getCount()==0)
                 printMemoryUsage(false);
             logger.info(String.format(
-            "[%s] Average Free memory: %d MB, Average Used memory: %d MB%n",
+            "[%s] Average Free memory: %d MB, Average Used memory: %d MB",
             model.getInfo().getKey(),
             this.freeMemory.getMean(),
             this.usedMemory.getMean()
