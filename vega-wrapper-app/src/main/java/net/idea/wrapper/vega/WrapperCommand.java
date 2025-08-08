@@ -30,10 +30,12 @@ import insilico.core.model.runner.iInsilicoModelRunnerMessenger;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.molecule.conversion.SmilesMolecule;
 import insilico.core.molecule.conversion.file.MoleculeFileSmiles;
+import net.idea.wrapper.InsilicoModelMultiWriter;
 import net.idea.wrapper.ModelResultWriter;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
 
 
 @Command(name = "vega", mixinStandardHelpOptions = true,
@@ -67,6 +69,10 @@ public class WrapperCommand implements Callable<Integer> {
     @Option(names = {"-f", "--fastmode"},
             description = "Enable fast mode (default: false)")
     boolean fastmode = false;
+
+    @Option(names = {"-j", "--jsonl"},
+    description = "Write original txt format in fastmode (otherwise jsonl)")
+    boolean jsonl = false;
 
     @Option(names = {"-z", "--reinicialize-model"},
             description = "Reinitialize model on every N rows. Default -1 (do not reinitialize)")
@@ -108,7 +114,8 @@ public class WrapperCommand implements Callable<Integer> {
                             inputGroup.inputFile,
                             outputDir,
                             smilesField,
-                            idField
+                            idField,
+                            !jsonl
                     );
                 System.out.println("\nDone.");
             } else {
@@ -206,7 +213,7 @@ public class WrapperCommand implements Callable<Integer> {
                     public void UpdateProgress() {
                         rowNum++;
                         System.out.print("\rProcessed rows: " + rowNum);
-                        if (rowNum % 100 == 0) {
+                        if (rowNum % 50 == 0) {
                             printMemoryUsage();
                         }
                         System.out.flush();
@@ -234,16 +241,60 @@ public class WrapperCommand implements Callable<Integer> {
         }
     }
 
+    protected Map<String, Object> output2record(InsilicoModel model, InsilicoModelOutput output) {
+        Map<String, Object> record = new HashMap<>(); 
+        record.put("SMILES", output.getMoleculeSMILES());
+        record.put("ID", output.getMoleculeId());
+        record.put("MODEL", model.getInfo().getKey());
+        record.put("ASSESSMENT", output.getAssessment());
+        String[] resultNames = model.GetResultsName();
+        Object[] resultValues = output.getResults();
+        if (resultValues != null)
+            for (int i = 0; i < resultNames.length; i++) {
+                record.put(String.format("RESULT.%s",resultNames[i]), resultValues[i]);
+            }
+        if (output.HasExperimental()) {
+            StringBuilder key = new StringBuilder("Experimental");
+            // if (model.GetTrainingSet().hasUnits()) 
+            //    key.append(" [").append(model.GetTrainingSet().getUnits()).append("]");
+            record.put(key.toString(), output.getExperimental()); 
+        }
+
+        
+        record.put("Status", output.getStatus());  
+        if (output.getStatus() == InsilicoModelOutput.OUTPUT_ERROR
+                || output.getStatus() == InsilicoModelOutput.OUTPUT_NOT_CALCULATED)
+            record.put("ERROR", output.getErrMessage()); 
+        else {
+            record.put("MainResultValue", output.getMainResultValue());       
+            if (output.getStatus() != InsilicoModelOutput.OUTPUT_OK_AD_MISSING) {
+                
+                if (output.getADI()!=null)
+                    record.put("ADI",output.getADI().GetIndexValueFormatted());
+                ArrayList<iADIndex> adiValues = output.getADIndex();
+                for (iADIndex x : adiValues) {
+                    record.put(String.format("ADI.%s",x.GetIndexName()), x.GetIndexValue());
+                }
+            }
+        }                
+        return record;
+    }  
+
+
     private int run_fast(
             InsilicoModel model,
             File inputFile,
             File outputDir,
             String smilesFieldName,
-            String idFieldName
+            String idFieldName,
+            Boolean originalFormat
     ) throws Exception {
         int rowNum = 0; 
-        ModelResultWriter resultWriter = new ModelResultWriter(outputDir);
-        // InsilicoModelRunnerByMolecule runner = new InsilicoModelRunnerByMolecule();
+        ModelResultWriter resultWriter = null;
+        InsilicoModelMultiWriter txtWriter = null;
+        if (originalFormat) txtWriter = new InsilicoModelMultiWriter(outputDir); 
+        else resultWriter = new ModelResultWriter(outputDir);
+
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
             System.out.println("Reading "+ inputFile);
             String headerLine = reader.readLine();
@@ -262,13 +313,15 @@ public class WrapperCommand implements Callable<Integer> {
             
             Integer smilesIndex = headerIndex.get(smilesFieldName);
             Integer idIndex = headerIndex.get(idFieldName);
+            System.out.println("idIndex" + idIndex);
             if (idIndex == null) idIndex = -1;
 
             if (smilesIndex == null) {
                 throw new IllegalArgumentException("Missing required field: " +
                         smilesFieldName );
             }
-            System.out.println("Writing to  "+ outputDir);
+            System.out.println(String.format("Writing results_%s%s to %s",
+            model.getInfo().getKey(),jsonl?".jsonl":".txt",outputDir));
    
             String line;
             while ((line = reader.readLine()) != null) {
@@ -294,62 +347,47 @@ public class WrapperCommand implements Callable<Integer> {
 
                 String smiles = fields[smilesIndex];
                 InsilicoMolecule mol = null;
-                Map<String, Object> record = new HashMap<>();                
+                Map<String, Object> record = null;                
                 try {
                     mol = SmilesMolecule.Convert(smiles); 
-                    // will throw exception on invalid structure
-                    // mol.GetStructure();
                     if (idIndex != null)
-                        mol.SetId(String.format("%d",idIndex));                    
-
-                    // runner.Run(mol);
+                        mol.SetId(String.format("%s",fields[idIndex]));   
+                    else
+                        mol.SetId(String.format("%d",rowNum));                 
                     InsilicoModelOutput output = model.Execute(mol);
-
-                    record.put("SMILES", output.getMoleculeSMILES());
-                    record.put("ID", output.getMoleculeId());
-                    record.put("MODEL", model.getInfo().getKey());
-                    record.put("ASSESSMENT", output.getAssessment());
-
-                    String[] resultNames = model.GetResultsName();
-                    Object[] resultValues = output.getResults();
-                    if (resultValues != null)
-                        for (int i = 0; i < resultNames.length; i++) {
-                            record.put(String.format("RESULT.%s",resultNames[i]), resultValues[i]);
-                        }
-                    if (output.HasExperimental())
-                        record.put("Experimental", output.getExperimental()); 
-
-                    
-                    record.put("Status", output.getStatus());  
-                    if (output.getStatus() == InsilicoModelOutput.OUTPUT_ERROR
-                            || output.getStatus() == InsilicoModelOutput.OUTPUT_NOT_CALCULATED)
-                        record.put("ERROR", output.getErrMessage()); 
+                    if (originalFormat)
+                        txtWriter.writeResult(rowNum, model, output , mol);
                     else {
-                        record.put("MainResultValue", output.getMainResultValue());       
-                        if (output.getStatus() != InsilicoModelOutput.OUTPUT_OK_AD_MISSING) {
-                            
-                            if (output.getADI()!=null)
-                                record.put("ADI",output.getADI().GetIndexValueFormatted());
-                            ArrayList<iADIndex> adiValues = output.getADIndex();
-                            for (iADIndex x : adiValues) {
-                                record.put(String.format("ADI.%s",x.GetIndexName()), x.GetIndexValue());
-                            }
-                        }
+                        record = output2record(model, output);
+                        resultWriter.writeResult(modelKey, record);
                     }
-          
                 } catch (Exception x) {
+                    /*
+                    record = new HashMap<>();  
                     record.put("ERROR", x.getMessage()); 
                     record.put("SMILES", smiles);
                     record.put("ID", idIndex);
                     record.put("MODEL", model.getInfo().getKey());
                     record.put("Status", -1);                     
+                     */
+                    if (originalFormat)
+                        txtWriter.writeResult(rowNum, model, null , mol);
+                    else {
+                        record = new HashMap<>();  
+                        record.put("ERROR", x.getMessage()); 
+                        record.put("SMILES", smiles);
+                        record.put("ID", idIndex);
+                        record.put("MODEL", model.getInfo().getKey());
+                        record.put("Status", -1);
+                        resultWriter.writeResult(modelKey, record);
+                    }
                 }                    
-                resultWriter.writeResult(model.getInfo().getKey(), record);
+                // resultWriter.writeResult(model.getInfo().getKey(), record);
                 if ((maxRows>0) & (rowNum>=maxRows)) break;
             }
         }
-
-        resultWriter.close();
+        if (originalFormat) txtWriter.close();
+        else resultWriter.close();
         return rowNum;
     }
 
@@ -370,15 +408,11 @@ public class WrapperCommand implements Callable<Integer> {
 
     public static void printMemoryUsage() {
         Runtime runtime = Runtime.getRuntime();
-
-        long maxMemory = runtime.maxMemory();
         long totalMemory = runtime.totalMemory();
         long freeMemory = runtime.freeMemory();
         long usedMemory = totalMemory - freeMemory;
         System.out.printf(
-            " Max memory: %d MB, Total memory: %d MB, Free memory: %d MB, Used memory: %d MB%n\n",
-            maxMemory / (1024 * 1024),
-            totalMemory / (1024 * 1024),
+            "Free memory: %d MB, Used memory: %d MB%n\n",
             freeMemory / (1024 * 1024),
             usedMemory / (1024 * 1024)
         );
