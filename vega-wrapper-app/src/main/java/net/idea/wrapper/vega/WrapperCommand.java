@@ -48,6 +48,9 @@ public class WrapperCommand implements Callable<Integer> {
 
     StreamingMeanLong freeMemory = new StreamingMeanLong();
     StreamingMeanLong usedMemory = new StreamingMeanLong();
+    StreamingMeanLong modelTimePerRecord = new StreamingMeanLong();
+    StreamingMeanLong globalTimePerRecord = new StreamingMeanLong();
+    
 
     static class InputGroup {
         @Option(names = {"-s", "--smiles"}, description = "Input SMILES")
@@ -101,22 +104,22 @@ public class WrapperCommand implements Callable<Integer> {
             // impl.doSomething();
         }
     }
-    public void printMemoryUsage() {
-        printMemoryUsage(true);
-    }
-    public void printMemoryUsage(boolean print) {
+
+    public String printMemoryUsage() {
         Runtime runtime = Runtime.getRuntime();
         long totalMemory = runtime.totalMemory();
         long _freeMemory = runtime.freeMemory();
         long _usedMemory = totalMemory - _freeMemory;
-        if (print)
-        logger.info(
-            String.format("Free memory: %d MB, Used memory: %d MB%n",
-            _freeMemory / (1024 * 1024),
-            _usedMemory / (1024 * 1024)
-        ));
+        
+        String msg = String.format("Memory: (used/free) %d/%d MB Time per molecule: %.4f s",
+            _usedMemory / (1024 * 1024),
+            _freeMemory / (1024 * 1024),            
+            modelTimePerRecord.getMean() / 1_000_000_000.0
+        );
+
         this.usedMemory.add(_usedMemory / (1024 * 1024));
         this.freeMemory.add(_freeMemory / (1024 * 1024));
+        return msg;
 
     }
     protected int runModel(String modelKey) throws Exception {
@@ -126,13 +129,14 @@ public class WrapperCommand implements Callable<Integer> {
             long endTime = System.nanoTime();
             long elapsedNano = endTime - startTime;
             double elapsedSeconds = elapsedNano / 1_000_000_000.0;                
-            logger.log(Level.FINE, String.format("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds));
+            logger.fine(String.format("Loading model %s in: %.2f seconds%n", modelKey, elapsedSeconds));
 
             int rowNum = 0;
             if (inputGroup.inputFile == null) fastmode = false;
             startTime = System.nanoTime();
             if (fastmode) {
-                logger.info(String.format("Processing %s in fast mode ...", modelKey));
+                System.out.println();
+                logger.info(String.format("[%s] Processing in fast mode ...", modelKey));
                 rowNum = run_fast(
                             model,
                             inputGroup.inputFile,
@@ -141,7 +145,6 @@ public class WrapperCommand implements Callable<Integer> {
                             idField,
                             !jsonl
                     );
-                logger.info("Done.");
             } else {
                 ArrayList<InsilicoMolecule> dataset = null;
                 if (inputGroup.smiles != null) {
@@ -153,7 +156,7 @@ public class WrapperCommand implements Callable<Integer> {
                         inputGroup.inputFile, smilesField, idField);
                     int smilesPos = positions[0];
                     int idPos = positions[1]; // can be -1   
-                    logger.log(Level.FINE,String.format("%s %d %s %d", smilesField, smilesPos,idField, idPos));
+                    logger.fine(String.format("%s %d %s %d", smilesField, smilesPos,idField, idPos));
                     MoleculeFileSmiles SMIReader = new MoleculeFileSmiles();
                     SMIReader.setCASField(-1);
                     SMIReader.setIdField(idPos);
@@ -165,23 +168,27 @@ public class WrapperCommand implements Callable<Integer> {
                 }
                 
                 rowNum = run_vega(model , dataset, outputDir);
+                
             }
+
             endTime = System.nanoTime();
             elapsedNano = endTime - startTime;
-            elapsedSeconds = elapsedNano / 1_000_000_000.0;                 
+            elapsedSeconds = elapsedNano / 1_000_000_000.0;
+            System.out.print("\r\n");
+            System.out.flush();                         
             if (rowNum > 0) {
-                double avgPerRow = elapsedSeconds / rowNum;
-                logger.info(String.format("[%s] Elapsed time: %.2f seconds Average time per row: %.4f seconds", model.getInfo().getKey(), elapsedSeconds, avgPerRow));
+                logger.info(String.format("[%s] Processed: %d rows Elapsed time: %.2f s Average time per molecule: %.4f s", 
+                    model.getInfo().getKey(), rowNum, elapsedSeconds, globalTimePerRecord.getMean() /  1_000_000_000.0 ));
             } else {
                 logger.log(Level.WARNING,"No rows processed.");
             }         
             if (this.freeMemory.getCount()==0)
-                printMemoryUsage(false);
+                printMemoryUsage();
             logger.info(String.format(
-            "[%s] Average Free memory: %d MB, Average Used memory: %d MB",
+            "[%s] Average Memory (used/free): %d/%d MB",
             model.getInfo().getKey(),
-            this.freeMemory.getMean(),
-            this.usedMemory.getMean()
+            this.usedMemory.getMean(),
+            this.freeMemory.getMean()            
             ));
             return rowNum>0?0:1;
         }  catch (Exception x) {
@@ -208,14 +215,23 @@ public class WrapperCommand implements Callable<Integer> {
                     List<String> model_keys = readKeys(file_models.toPath());
                     int rownum = 0;
                     for (String model_key:model_keys) try {
-                        logger.info(model_key);
+                        logger.fine(String.format("Running %s",model_key));
+                        this.modelTimePerRecord = new StreamingMeanLong();
+                        this.freeMemory = new StreamingMeanLong();
+                        this.usedMemory = new StreamingMeanLong();
                         rownum += runModel(model_key.trim());
                     } catch (Exception x) {
                         logger.severe(String.format("%s %s", model_key, x.getMessage()));
                     }
                     return rownum;
-                } else {    
+                } else try {    
+                    this.modelTimePerRecord = new StreamingMeanLong();
+                    this.freeMemory = new StreamingMeanLong();
+                    this.usedMemory = new StreamingMeanLong();                    
                     return runModel(modelKey);
+                }  catch (Exception x) {
+                    logger.severe(String.format("%s %s", modelKey, x.getMessage()));
+                    throw x;
                 }
 
             }
@@ -226,7 +242,7 @@ public class WrapperCommand implements Callable<Integer> {
     }
 
     private int run_vega( InsilicoModel model, ArrayList<InsilicoMolecule> dataset, File outputDir) throws Exception {
-        
+        // long startTime = System.nanoTime();
         try {
             try { 
                 InsilicoModelRunnerByMolecule runner = new InsilicoModelRunnerByMolecule();
@@ -244,7 +260,7 @@ public class WrapperCommand implements Callable<Integer> {
                         rowNum++;
                         System.out.print("\rProcessed rows: " + rowNum);
                         if (rowNum % 100 == 0) {
-                            printMemoryUsage();
+                            System.out.print(" " + printMemoryUsage());
                         }
                         System.out.flush();
                         
@@ -256,7 +272,7 @@ public class WrapperCommand implements Callable<Integer> {
                 runner.Run(dataset);
                 for (InsilicoModelWrapper curModel : runner.GetModelWrappers()) {
                     File outputFile = new File(outputDir, "report_" + model.getInfo().getKey()  + ".txt");
-                    logger.info("Writing to  "+ outputFile);                    
+                    logger.fine("Writing to  "+ outputFile);                    
                     ReportTXTSingle.PrintReport(dataset, curModel, new PrintWriter(outputFile));
                 }
 
@@ -268,6 +284,11 @@ public class WrapperCommand implements Callable<Integer> {
         } catch (Exception e) {
             logger.severe(e.getMessage());
             return 0;
+        } finally {
+            // long endTime = System.nanoTime();
+            //long elapsedNano = endTime - startTime;
+            //modelTimePerRecord.add(elapsedNano);
+            //globalTimePerRecord.add(elapsedNano);
         }
     }
 
@@ -322,12 +343,12 @@ public class WrapperCommand implements Callable<Integer> {
         int rowNum = 0; 
         ModelResultWriter resultWriter = null;
         resultWriter = new ModelResultWriter(outputDir, ! originalFormat);
-
+        String lastMemoryInfo = "";
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
-            logger.info("Reading "+ inputFile);
+            logger.fine("Reading "+ inputFile);
             String headerLine = reader.readLine();
             if (headerLine == null) {
-                throw new IOException("Input file is empty.");
+                throw new IOException(String.format("Input file %s is empty.", inputFile.getAbsolutePath()));
             }
 
             String[] headers = headerLine.split("\t");
@@ -338,7 +359,7 @@ public class WrapperCommand implements Callable<Integer> {
                 _log.append("\t" );
                 headerIndex.put(headers[i].trim(), i);
             }
-            logger.info(_log.toString());
+            logger.finer(_log.toString());
             
             Integer smilesIndex = headerIndex.get(smilesFieldName);
             Integer idIndex = headerIndex.get(idFieldName);
@@ -349,9 +370,10 @@ public class WrapperCommand implements Callable<Integer> {
                 throw new IllegalArgumentException("Missing required field: " +
                         smilesFieldName );
             }
-            logger.info(String.format("Writing results_%s%s to %s",
+            logger.fine(String.format("Writing resultsw_%s%s to %s",
             model.getInfo().getKey(),jsonl?".jsonl":".txt",outputDir));
    
+            
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
@@ -363,16 +385,18 @@ public class WrapperCommand implements Callable<Integer> {
                         Class cls = model.getClass();
                         model = null;
                         model = (InsilicoModel) cls.getDeclaredConstructor().newInstance();
-                        printMemoryUsage();
+                        logger.info(String.format("[%s] %s", model.getInfo().getKey(), printMemoryUsage()));
                     }
                 }                  
-                System.out.print("\rProcessed rows: " + rowNum + " ");
+
                 if (rowNum % 100 == 0) {
-                    printMemoryUsage();
+                    lastMemoryInfo = printMemoryUsage();
                 }                
-                
+                System.out.print("\rProcessed rows: " + rowNum + " " + lastMemoryInfo);
                 System.out.flush();
-                //}                
+            
+
+                long startTime = System.nanoTime();
                 String[] fields = line.split("\t", -1); // include trailing empty fields
                 if (fields.length <= Math.max(smilesIndex, idIndex)) continue;
 
@@ -411,7 +435,13 @@ public class WrapperCommand implements Callable<Integer> {
                         resultWriter.writeResult(modelKey, record);
                     }
                                              */
-                }                    
+                } finally {
+                    long endTime = System.nanoTime();
+                    long elapsedNano = endTime - startTime;
+                    modelTimePerRecord.add(elapsedNano);
+                    globalTimePerRecord.add(elapsedNano);
+                    
+                }                
                 // resultWriter.writeResult(model.getInfo().getKey(), record);
                 if ((maxRows>0) & (rowNum>=maxRows)) break;
             }
