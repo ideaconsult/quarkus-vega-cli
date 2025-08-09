@@ -11,6 +11,9 @@ import insilico.core.model.iInsilicoModel;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.tools.utils.ModelUtilities;
 import insilico.core.version.InsilicoInfo;
+import insilico.core.constant.MessagesAD;
+
+import static insilico.core.constant.MessagesAD.SIMILARITY_NAME;
 
 import java.io.*;
 import java.util.HashMap;
@@ -48,6 +51,49 @@ public class ModelResultWriter {
         return altFile;
     }
 
+    public static String[] GetADItemsName(iInsilicoModel model) {
+        String[] names = model.GetADItemsName();
+        if (names.length==0) 
+            switch (model.getInfo().getKey()) {
+                case "VAPOUR_PRESSURE":
+                case "MELTING_POINT":                
+                    return new String[] {
+                    StringSelectorCore.getString("msg_similarity_name"),
+                    StringSelectorCore.getString("msg_accuracy_name"),
+                    StringSelectorCore.getString("msg_concordance_name"),
+                    StringSelectorCore.getString("msg_maxerr_name"),
+                    StringSelectorCore.getString("msg_range_name"),
+                    StringSelectorCore.getString("msg_acf_name")
+                };
+                case "SKIN_SENSITIZATION_CONCERT": 
+                case "SKIN_IRRITATION": 
+                case "GLUCO_RECEPTOR": 
+                case "EYE IRRITATION": 
+                case "AROM_TOX21":
+                    return new String[] {
+                    StringSelectorCore.getString("msg_similarity_name"),
+                    StringSelectorCore.getString("msg_accuracy_name"),
+                    StringSelectorCore.getString("msg_concordance_name"),
+                    StringSelectorCore.getString("msg_acf_name")
+                };
+                case "TPO_OBERON":                
+                case "HEPA_PXRUP": 
+                case "HEPA_PPARGUP":
+                case "HEPA_PPARAUP":
+                case "HEPA_NRF2":
+                    return new String[] {
+                    StringSelectorCore.getString("msg_similarity_name"),
+                    StringSelectorCore.getString("msg_accuracy_name"),
+                    StringSelectorCore.getString("msg_concordance_name"),
+                    StringSelectorCore.getString("msg_range_name"),
+                    StringSelectorCore.getString("msg_acf_name")
+                };
+        
+                default:
+                    break;
+            }
+        return names;
+    }
     public void writeResult(InsilicoModel model, Map<String, Object> resultRecord, int index) throws IOException {
         String modelName = model.getInfo().getKey();
         BufferedWriter writer = writers.get(modelName);
@@ -127,7 +173,7 @@ public class ModelResultWriter {
                 record.put(StringSelectorCore.getString("report_txt_struct_alerts"), "-");
             }
             record.put(StringSelectorCore.getString("report_txt_adi"), "-");
-            for (String adiName : model.GetADItemsName()) record.put(adiName, "-");
+            for (String adiName : ModelResultWriter.GetADItemsName(model)) record.put(adiName, "-");
         } else {
             record.put("Assessment", output.getAssessment());
             String[] results = output.getResults();
@@ -145,14 +191,14 @@ public class ModelResultWriter {
             if (output.getStatus() != 2) {
                 record.put(StringSelectorCore.getString("report_txt_adi"), output.getADI().GetIndexValueFormatted());
                 Iterator<iADIndex> adIndexIter = output.getADIndex().iterator();
-                for (String adiName : model.GetADItemsName()) {
+                for (String adiName : ModelResultWriter.GetADItemsName(model)) {
                     record.put(adiName, adIndexIter.hasNext()
                         ? adIndexIter.next().GetIndexValueFormatted()
                         : "-");
                 }
             } else {
                 record.put(StringSelectorCore.getString("report_txt_adi"), "-");
-                for (String adiName : model.GetADItemsName()) record.put(adiName, "-");
+                for (String adiName : ModelResultWriter.GetADItemsName(model)) record.put(adiName, "-");
             }
         }
 
