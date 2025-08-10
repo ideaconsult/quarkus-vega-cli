@@ -111,7 +111,7 @@ public class WrapperCommand implements Callable<Integer> {
         long _freeMemory = runtime.freeMemory();
         long _usedMemory = totalMemory - _freeMemory;
         
-        String msg = String.format("Memory: (used/free) %d/%d MB Time per molecule: %.4f s",
+        String msg = String.format("Memory (used/free): %d/%d MB Time per molecule: %.4f s",
             _usedMemory / (1024 * 1024),
             _freeMemory / (1024 * 1024),            
             modelTimePerRecord.getMean() / 1_000_000_000.0
@@ -174,8 +174,8 @@ public class WrapperCommand implements Callable<Integer> {
             endTime = System.nanoTime();
             elapsedNano = endTime - startTime;
             elapsedSeconds = elapsedNano / 1_000_000_000.0;
-            System.out.print("\r\n");
-            System.out.flush();                         
+            System.out.print("\r--------------------------------------------------------------------------------------------------\n");
+            System.out.flush();
             if (rowNum > 0) {
                 logger.info(String.format("[%s] Processed: %d rows Elapsed time: %.2f s Average time per molecule: %.4f s", 
                     model.getInfo().getKey(), rowNum, elapsedSeconds, globalTimePerRecord.getMean() /  1_000_000_000.0 ));
@@ -221,7 +221,7 @@ public class WrapperCommand implements Callable<Integer> {
                         this.usedMemory = new StreamingMeanLong();
                         rownum += runModel(model_key.trim());
                     } catch (Exception x) {
-                        logger.severe(String.format("%s %s", model_key, x.getMessage()));
+                        logger.log(Level.SEVERE, model_key, x);
                     }
                     return rownum;
                 } else try {    
@@ -230,13 +230,13 @@ public class WrapperCommand implements Callable<Integer> {
                     this.usedMemory = new StreamingMeanLong();                    
                     return runModel(modelKey);
                 }  catch (Exception x) {
-                    logger.severe(String.format("%s %s", modelKey, x.getMessage()));
+                    logger.log(Level.SEVERE, modelKey, x);
                     throw x;
                 }
 
             }
         } catch (Exception e) {
-            logger.severe(e.getMessage());
+            logger.log(Level.SEVERE, "Error" , e);
             return 1;
         }
     }
@@ -277,12 +277,12 @@ public class WrapperCommand implements Callable<Integer> {
                 }
 
             } catch (Exception x) {
-                logger.severe(x.getMessage());
+                logger.log(Level.SEVERE, model.getInfo().getKey(), x);
                 
             }                
             return dataset.size();
         } catch (Exception e) {
-            logger.severe(e.getMessage());
+            logger.log(Level.SEVERE, model.getInfo().getKey(), e);
             return 0;
         } finally {
             // long endTime = System.nanoTime();
@@ -291,46 +291,6 @@ public class WrapperCommand implements Callable<Integer> {
             //globalTimePerRecord.add(elapsedNano);
         }
     }
-
-    protected Map<String, Object> output2record(InsilicoModel model, InsilicoModelOutput output) {
-        Map<String, Object> record = new HashMap<>(); 
-        record.put("SMILES", output.getMoleculeSMILES());
-        record.put("ID", output.getMoleculeId());
-        record.put("MODEL", model.getInfo().getKey());
-        record.put("ASSESSMENT", output.getAssessment());
-        String[] resultNames = model.GetResultsName();
-        Object[] resultValues = output.getResults();
-        if (resultValues != null)
-            for (int i = 0; i < resultNames.length; i++) {
-                record.put(String.format("RESULT.%s",resultNames[i]), resultValues[i]);
-            }
-        if (output.HasExperimental()) {
-            StringBuilder key = new StringBuilder("Experimental");
-            // if (model.GetTrainingSet().hasUnits()) 
-            //    key.append(" [").append(model.GetTrainingSet().getUnits()).append("]");
-            record.put(key.toString(), output.getExperimental()); 
-        }
-
-        
-        record.put("Status", output.getStatus());  
-        if (output.getStatus() == InsilicoModelOutput.OUTPUT_ERROR
-                || output.getStatus() == InsilicoModelOutput.OUTPUT_NOT_CALCULATED)
-            record.put("ERROR", output.getErrMessage()); 
-        else {
-            record.put("MainResultValue", output.getMainResultValue());       
-            if (output.getStatus() != InsilicoModelOutput.OUTPUT_OK_AD_MISSING) {
-                
-                if (output.getADI()!=null)
-                    record.put("ADI",output.getADI().GetIndexValueFormatted());
-                ArrayList<iADIndex> adiValues = output.getADIndex();
-                for (iADIndex x : adiValues) {
-                    record.put(String.format("ADI.%s",x.GetIndexName()), x.GetIndexValue());
-                }
-            }
-        }                
-        return record;
-    }  
-
 
     private int run_fast(
             InsilicoModel model,
@@ -392,7 +352,7 @@ public class WrapperCommand implements Callable<Integer> {
                 if (rowNum % 100 == 0) {
                     lastMemoryInfo = printMemoryUsage();
                 }                
-                System.out.print("\rProcessed rows: " + rowNum + " " + lastMemoryInfo);
+                System.out.print("\rProcessed rows: " + rowNum + "  " + lastMemoryInfo + "    ");
                 System.out.flush();
             
 
@@ -414,7 +374,7 @@ public class WrapperCommand implements Callable<Integer> {
                     resultWriter.writeResult(model, record, rowNum);
 
                 } catch (Exception x) {
-                    logger.severe(x.getMessage());
+                    logger.log(Level.SEVERE, "Unexpected error occurred", x);
                     /*
                     record = new HashMap<>();  
                     record.put("ERROR", x.getMessage()); 

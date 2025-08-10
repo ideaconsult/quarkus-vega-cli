@@ -11,15 +11,14 @@ import insilico.core.model.iInsilicoModel;
 import insilico.core.molecule.InsilicoMolecule;
 import insilico.core.tools.utils.ModelUtilities;
 import insilico.core.version.InsilicoInfo;
-import insilico.core.constant.MessagesAD;
 
-import static insilico.core.constant.MessagesAD.SIMILARITY_NAME;
 
 import java.io.*;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 
 public class ModelResultWriter {
     private Map<String, BufferedWriter> writers = new HashMap<>();
@@ -53,6 +52,7 @@ public class ModelResultWriter {
 
     public static String[] GetADItemsName(iInsilicoModel model) {
         String[] names = model.GetADItemsName();
+        // System.out.println(Arrays.toString(names);
         if (names.length==0) 
             switch (model.getInfo().getKey()) {
                 case "VAPOUR_PRESSURE":
@@ -140,9 +140,10 @@ public class ModelResultWriter {
         }
         writer.write(System.lineSeparator());
         boolean first = true;
+        // System.out.println(resultRecord);
         for (Object key : resultRecord.keySet()) {
             if (!first) writer.write(_tab);
-            writer.write(key.toString());
+            writer.write(key==null?"null":key.toString());
             first = false;
         }
         writer.write(System.lineSeparator());
@@ -159,7 +160,7 @@ public class ModelResultWriter {
     public static Map<String, Object> toRecord(int index, InsilicoModelOutput output,
                          InsilicoMolecule molecule, iInsilicoModel model) throws IOException {
         Map<String, Object> record = new LinkedHashMap<>(); // preserves order
-
+        String[] adi_names = ModelResultWriter.GetADItemsName(model);
         // Core columns
         record.put("No.", index);
         record.put("ID", output.getMoleculeId());
@@ -173,7 +174,7 @@ public class ModelResultWriter {
                 record.put(StringSelectorCore.getString("report_txt_struct_alerts"), "-");
             }
             record.put(StringSelectorCore.getString("report_txt_adi"), "-");
-            for (String adiName : ModelResultWriter.GetADItemsName(model)) record.put(adiName, "-");
+            for (String adiName : adi_names) record.put(adiName, "-");
         } else {
             record.put("Assessment", output.getAssessment());
             String[] results = output.getResults();
@@ -191,14 +192,14 @@ public class ModelResultWriter {
             if (output.getStatus() != 2) {
                 record.put(StringSelectorCore.getString("report_txt_adi"), output.getADI().GetIndexValueFormatted());
                 Iterator<iADIndex> adIndexIter = output.getADIndex().iterator();
-                for (String adiName : ModelResultWriter.GetADItemsName(model)) {
+                for (String adiName : adi_names) {
                     record.put(adiName, adIndexIter.hasNext()
                         ? adIndexIter.next().GetIndexValueFormatted()
                         : "-");
                 }
             } else {
                 record.put(StringSelectorCore.getString("report_txt_adi"), "-");
-                for (String adiName : ModelResultWriter.GetADItemsName(model)) record.put(adiName, "-");
+                for (String adiName : adi_names) record.put(adiName, "-");
             }
         }
 
