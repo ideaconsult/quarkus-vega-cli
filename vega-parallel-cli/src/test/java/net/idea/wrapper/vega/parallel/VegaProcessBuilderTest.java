@@ -22,7 +22,7 @@ class VegaProcessBuilderTest {
                 "-o", "PLACEHOLDER",
                 "-f");
 
-        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir);
+        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir, "vega");
         ProcessBuilder pb = builder.createProcessForModel("MELTING_POINT");
 
         List<String> command = pb.command();
@@ -42,11 +42,27 @@ class VegaProcessBuilderTest {
     }
 
     @Test
+    void testCustomCommand(@TempDir Path tempDir) throws IOException {
+        String vegaJar = "test.jar";
+        List<String> baseArgs = Arrays.asList("-m", "PLACEHOLDER", "-o", "PLACEHOLDER");
+        String customCommand = "custom-command";
+
+        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir, customCommand);
+        ProcessBuilder pb = builder.createProcessForModel("MODEL1");
+        List<String> command = pb.command();
+
+        assertEquals("java", command.get(0));
+        assertEquals("-jar", command.get(1));
+        assertEquals("test.jar", command.get(2));
+        assertEquals(customCommand, command.get(3));
+    }
+
+    @Test
     void testMultipleModelsUseSameOutputDir(@TempDir Path tempDir) throws IOException {
         String vegaJar = "test.jar";
         List<String> baseArgs = Arrays.asList("-m", "PLACEHOLDER", "-o", "PLACEHOLDER");
 
-        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir);
+        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir, "vega");
 
         // Create processes for multiple models
         ProcessBuilder pb1 = builder.createProcessForModel("MODEL1");

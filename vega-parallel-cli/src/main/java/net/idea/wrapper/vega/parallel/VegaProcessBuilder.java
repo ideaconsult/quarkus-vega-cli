@@ -15,11 +15,13 @@ public class VegaProcessBuilder {
     private final String vegaJarPath;
     private final List<String> baseArgs;
     private final Path outputDir;
+    private final String commandName;
 
-    public VegaProcessBuilder(String vegaJarPath, List<String> baseArgs, Path outputDir) {
+    public VegaProcessBuilder(String vegaJarPath, List<String> baseArgs, Path outputDir, String commandName) {
         this.vegaJarPath = vegaJarPath;
         this.baseArgs = baseArgs;
         this.outputDir = outputDir;
+        this.commandName = commandName;
     }
 
     /**
@@ -37,7 +39,7 @@ public class VegaProcessBuilder {
         command.add("java");
         command.add("-jar");
         command.add(vegaJarPath);
-        command.add("vega");
+        command.add(commandName);
 
         // Add base arguments, replacing -m value only
         boolean skipNext = false;

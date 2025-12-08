@@ -63,6 +63,9 @@ public class ParallelVegaCommand implements Runnable {
             "--timeout" }, description = "Timeout in minutes for single model execution (default: -1, no timeout)")
     Long timeout;
 
+    @picocli.CommandLine.Parameters(index = "0", arity = "0..1", description = "Subcommand to execute (default: vega)", defaultValue = "vega")
+    String command;
+
     @Override
     public void run() {
         try {
@@ -91,7 +94,7 @@ public class ParallelVegaCommand implements Runnable {
             Files.createDirectories(outputPath);
 
             // Execute models in parallel
-            VegaProcessBuilder processBuilder = new VegaProcessBuilder(jarPath, baseArgs, outputPath);
+            VegaProcessBuilder processBuilder = new VegaProcessBuilder(jarPath, baseArgs, outputPath, command);
             long modelTimeout = (timeout != null) ? timeout : -1L;
             ModelExecutor executor = new ModelExecutor(processBuilder, numWorkers, models.size(), modelTimeout);
 
