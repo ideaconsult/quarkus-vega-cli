@@ -59,6 +59,10 @@ public class ParallelVegaCommand implements Runnable {
             "--reinicialize-model" }, description = "Reinitialize model on every N rows. Default -1 (do not reinitialize)")
     Integer reinitializeModel;
 
+    @Option(names = {
+            "--timeout" }, description = "Timeout in minutes for single model execution (default: -1, no timeout)")
+    Long timeout;
+
     @Override
     public void run() {
         try {
@@ -88,7 +92,8 @@ public class ParallelVegaCommand implements Runnable {
 
             // Execute models in parallel
             VegaProcessBuilder processBuilder = new VegaProcessBuilder(jarPath, baseArgs, outputPath);
-            ModelExecutor executor = new ModelExecutor(processBuilder, numWorkers, models.size());
+            long modelTimeout = (timeout != null) ? timeout : -1L;
+            ModelExecutor executor = new ModelExecutor(processBuilder, numWorkers, models.size(), modelTimeout);
 
             boolean success = executor.executeModels(models);
 

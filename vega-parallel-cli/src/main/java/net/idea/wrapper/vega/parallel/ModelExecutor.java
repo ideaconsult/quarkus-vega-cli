@@ -17,11 +17,13 @@ public class ModelExecutor {
     private final VegaProcessBuilder processBuilder;
     private final ProgressTracker progressTracker;
     private final int workers;
+    private final long timeout;
 
-    public ModelExecutor(VegaProcessBuilder processBuilder, int workers, int totalModels) {
+    public ModelExecutor(VegaProcessBuilder processBuilder, int workers, int totalModels, long timeout) {
         this.processBuilder = processBuilder;
         this.workers = workers;
         this.progressTracker = new ProgressTracker(totalModels);
+        this.timeout = timeout;
     }
 
     /**
@@ -45,12 +47,8 @@ public class ModelExecutor {
         // Shutdown executor and wait for completion
         executor.shutdown();
         try {
-            // Wait for all tasks to complete (with a very long timeout)
-            if (!executor.awaitTermination(24, TimeUnit.HOURS)) {
-                System.err.println("Execution timed out after 24 hours");
-                executor.shutdownNow();
-                return false;
-            }
+            // Wait for all tasks to complete (indefinitely)
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
         } catch (InterruptedException e) {
             System.err.println("Execution interrupted");
             executor.shutdownNow();
@@ -83,18 +81,30 @@ public class ModelExecutor {
             }
 
             // Wait for process to complete
-            int exitCode = process.waitFor();
-
-            if (exitCode == 0) {
-                progressTracker.modelCompleted(modelKey);
+            boolean finished;
+            if (timeout > 0) {
+                finished = process.waitFor(timeout, TimeUnit.MINUTES);
             } else {
-                String errorMsg = "Exit code: " + exitCode;
-                // Include last few lines of output if available
-                String[] lines = output.toString().split("\n");
-                if (lines.length > 0) {
-                    errorMsg += " - Last output: " + lines[lines.length - 1];
+                process.waitFor();
+                finished = true;
+            }
+
+            if (finished) {
+                int exitCode = process.exitValue();
+                if (exitCode == 0) {
+                    progressTracker.modelCompleted(modelKey);
+                } else {
+                    String errorMsg = "Exit code: " + exitCode;
+                    // Include last few lines of output if available
+                    String[] lines = output.toString().split("\n");
+                    if (lines.length > 0) {
+                        errorMsg += " - Last output: " + lines[lines.length - 1];
+                    }
+                    progressTracker.modelFailed(modelKey, errorMsg);
                 }
-                progressTracker.modelFailed(modelKey, errorMsg);
+            } else {
+                process.destroyForcibly();
+                progressTracker.modelFailed(modelKey, "Timed out after " + timeout + " minutes");
             }
 
         } catch (IOException e) {
