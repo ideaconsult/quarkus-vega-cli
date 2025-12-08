@@ -18,17 +18,18 @@ This tool wraps the existing `vega-wrapper-app` JAR and executes multiple models
 ## Building
 
 ```bash
+
 mvn clean package
 ```
 
-This creates a runner JAR in `target/vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar`
+This creates a self-contained **uber-jar** (full jar with all dependencies) in `target/vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar`. You can run this file on any machine with Java installed.
 
 ## Usage
 
 ### Basic Usage
 
 ```bash
-java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
+java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
   -i input.txt \
   --smilesfield="SMILES" \
   --idfield="ID" \
@@ -43,6 +44,17 @@ java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
 
 - `--workers, -w <N>` - Number of parallel workers (default: number of CPU cores)
 - `--vega-jar <path>` - Path to VEGA JAR file (default: auto-detect)
+- `--timeout <minutes>` - Timeout for single model execution in minutes (default: -1, no timeout)
+
+#### VEGA Subcommand
+
+The subcommand to execute can be passed as a positional argument:
+
+```bash
+java -jar vega-parallel-cli.jar [subcommand] [options] ...
+```
+
+- `[subcommand]` - Subcommand to execute (default: `vega`)
 
 #### VEGA Options (Pass-through)
 
@@ -64,7 +76,7 @@ All original VEGA CLI options are supported:
 #### Execute Multiple Models with 4 Workers
 
 ```bash
-java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
+java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
   -i test.txt \
   --smilesfield="SMILES" \
   --idfield="SMILES" \
@@ -77,7 +89,7 @@ java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
 #### Execute Single Model (No Parallelization)
 
 ```bash
-java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
+java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
   -i test.txt \
   --smilesfield="SMILES" \
   --idfield="SMILES" \
@@ -89,12 +101,24 @@ java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
 #### Specify Custom VEGA JAR Path
 
 ```bash
-java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
+java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
   -i test.txt \
   -m models.txt \
   -o output \
   --vega-jar /path/to/vega-wrapper-app-1.2.4-SNAPSHOT-runner.jar \
   --workers 8
+```
+
+#### Execute with Timeout
+
+Set a timeout of 60 minutes for each model execution:
+
+```bash
+java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
+  -i test.txt \
+  -m models.txt \
+  -o output \
+  --timeout 60
 ```
 
 ## Model File Format

@@ -15,7 +15,7 @@ import java.util.List;
  * Main CLI command for parallel VEGA execution.
  */
 @TopCommand
-@Command(name = "vega-parallel", mixinStandardHelpOptions = true, version = "1.0.0", description = "Parallel execution wrapper for VEGA CLI")
+@Command(name = "vega-parallel", mixinStandardHelpOptions = true, version = "1.0.1", description = "Parallel execution wrapper for VEGA CLI")
 public class ParallelVegaCommand implements Runnable {
 
     // Parallel execution options
