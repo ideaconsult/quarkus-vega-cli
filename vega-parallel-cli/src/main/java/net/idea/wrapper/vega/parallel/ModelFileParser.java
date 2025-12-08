@@ -9,18 +9,8 @@ import java.util.List;
 
 /**
  * Parses model files to extract model keys.
- * package net.idea.wrapper.vega.parallel;
- * 
- * import java.io.BufferedReader;
- * import java.io.IOException;
- * import java.nio.file.Files;
- * import java.nio.file.Path;
- * import java.util.ArrayList;
- * import java.util.List;
- * 
- * /**
- * Parses model files to extract model keys.
  * Expects tab-delimited format with model keys in the first column.
+ * Skips the first non-empty line as a header.
  */
 public class ModelFileParser {
 

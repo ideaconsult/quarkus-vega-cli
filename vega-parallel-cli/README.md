@@ -99,12 +99,13 @@ java -jar vega-parallel-cli-1.0.0-SNAPSHOT-runner.jar \
 
 ## Model File Format
 
-The model file should be tab-delimited with model keys in the first column:
+The model file should be tab-delimited with model keys in the first column. **The first non-empty line is automatically skipped as a header.**
 
 ```
-MELTING_POINT	Description of model
-BCF	Another model
-MUTAGENICITY	Yet another model
+Key	name	enabled
+MELTING_POINT	Description of model	TRUE
+BCF	Another model	TRUE
+MUTAGENICITY	Yet another model	TRUE
 ```
 
 Only the first column is used; additional columns are ignored.

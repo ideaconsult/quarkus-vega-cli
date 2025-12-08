@@ -16,12 +16,13 @@ class ModelFileParserTest {
 
     @Test
     void testParseValidModelFile(@TempDir Path tempDir) throws IOException {
-        // Create a test model file
+        // Create a test model file with header
         Path modelFile = tempDir.resolve("models.txt");
         Files.writeString(modelFile,
-                "MELTING_POINT\tDescription 1\n" +
-                        "BCF\tDescription 2\n" +
-                        "MUTAGENICITY\tDescription 3\n");
+                "Key\tname\tenabled\n" +
+                        "MELTING_POINT\tDescription 1\tTRUE\n" +
+                        "BCF\tDescription 2\tTRUE\n" +
+                        "MUTAGENICITY\tDescription 3\tTRUE\n");
 
         List<String> models = ModelFileParser.parseModelFile(modelFile);
 
@@ -35,7 +36,9 @@ class ModelFileParserTest {
     void testParseFileWithEmptyLines(@TempDir Path tempDir) throws IOException {
         Path modelFile = tempDir.resolve("models.txt");
         Files.writeString(modelFile,
-                "MODEL1\tDesc\n" +
+                "Key\tname\n" +
+                        "\n" +
+                        "MODEL1\tDesc\n" +
                         "\n" +
                         "MODEL2\tDesc\n" +
                         "\n\n" +
@@ -50,7 +53,8 @@ class ModelFileParserTest {
     void testParseFileWithSingleColumn(@TempDir Path tempDir) throws IOException {
         Path modelFile = tempDir.resolve("models.txt");
         Files.writeString(modelFile,
-                "MODEL1\n" +
+                "Key\n" +
+                        "MODEL1\n" +
                         "MODEL2\n" +
                         "MODEL3\n");
 
