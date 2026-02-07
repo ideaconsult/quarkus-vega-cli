@@ -13,9 +13,11 @@ This project is a Quarkus command-line application that wraps the functionality 
 
 ### Obtaining VEGA-GUI 1.2.4
 
-Download `Vega-GUI-1.2.4.jar` from the official VEGA QSAR website:
+Download VEGA-GUI version 1.2.4:
+- **Direct download**: https://www.vegahub.eu/vegahub-dwn/VEGA-GUI-1.2.4.zip
 - **Download page**: https://www.vegahub.eu/download/vega-qsar-download/
-- Look for version 1.2.4 specifically
+
+Extract the ZIP file and locate `Vega-GUI-1.2.4.jar` inside.
 
 > [!NOTE]
 > This wrapper has been tested with VEGA-GUI version 1.2.4. It may work with later versions but compatibility has not been verified.
