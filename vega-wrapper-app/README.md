@@ -1,60 +1,88 @@
 # vega-wrapper-app Project
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+This project is a Quarkus command-line application that wraps the functionality of `VEGA-GUI.jar`.
 
-If you want to learn more about Quarkus, please visit its website: https://quarkus.io/ .
+## Requirements
 
-## Running the application in dev mode
+- JDK 17+
+- Maven 3.8+
+- **VEGA-GUI JAR**: An external `Vega-GUI-<version>.jar` file is required to run this application. It is NOT bundled in the distribution.
 
-You can run your application in dev mode that enables live coding using:
-```shell script
-./mvnw compile quarkus:dev
-```
-
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at http://localhost:8080/q/dev/.
-
-## Packaging and running the application
+## Building the application
 
 The application can be packaged using:
 ```shell script
-./mvnw package
+./mvnw package -DskipTests
 ```
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
+It produces:
+*   `target/vega-wrapper-app-*-runner.jar`: The application runner JAR.
+*   `target/lib/`: A folder containing the application dependencies.
 
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
+This structure allows you to separate the application code from its dependencies.
 
-If you want to build an _über-jar_, execute the following command:
-```shell script
-mvn clean package -Dquarkus.package.type=uber-jar
-```
+## Running the application
 
-Run with Quarkus dev mode (for testing):
-```shell script
-./mvnw quarkus:dev -- -i "myInputData"
-```
+Since the `VEGA-GUI` dependency is externalized, you must use the provided launch scripts to run the application.
 
-Or run the packaged app:
-```shell script
-java -jar .\target\quarkus-app\quarkus-run.jar 
-```
+### Windows
 
+1.  Ensure you have `Vega-GUI-1.2.4.jar` available.
+2.  Use `vega.bat` to run the application.
+    *   By default, it looks for `lib\Vega-GUI-1.2.4.jar`.
+    *   You can specify a custom path using the `VEGA_JAR_PATH` environment variable.
 
+**Example:**
+```cmd
+rem Default location (lib/Vega-GUI-1.2.4.jar)
+vega.bat vega --list-models
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
-
-## Creating a native executable
-
-You can create a native executable using: 
-```shell script
-./mvnw package -Pnative
+rem Custom location
+set VEGA_JAR_PATH=C:\path\to\Vega-GUI.jar
+vega.bat vega --list-models
 ```
 
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using: 
-```shell script
-./mvnw package -Pnative -Dquarkus.native.container-build=true
+### Linux / Mac
+
+1.  Ensure you have `Vega-GUI-1.2.4.jar` available.
+2.  Use `vega.sh` to run the application.
+    *   By default, it looks for `lib/Vega-GUI-1.2.4.jar`.
+    *   You can specify a custom path using the `VEGA_JAR_PATH` environment variable.
+
+**Example:**
+```bash
+# Default location (lib/Vega-GUI-1.2.4.jar)
+./vega.sh vega --list-models
+
+# Custom location
+export VEGA_JAR_PATH=/path/to/Vega-GUI.jar
+./vega.sh vega --list-models
 ```
 
-You can then execute your native executable with: `./target/vega-wrapper-app-1.0.0-SNAPSHOT-runner`
+## Configuration
 
-If you want to learn more about building native executables, please consult https://quarkus.io/guides/maven-tooling.
+The launch scripts (`vega.bat` and `vega.sh`) are designed for **deployment**.
+They expect the following directory structure:
+
+```text
+.
+├── vega.bat (or vega.sh)
+├── vega-wrapper-app-*-runner.jar  (uber-jar with all Quarkus dependencies)
+└── Vega-GUI-1.2.4.jar  (external VEGA JAR)
+```
+
+**To deploy:**
+1. Copy `target/vega-wrapper-app-*-runner.jar` to your deployment directory
+2. Place `Vega-GUI-1.2.4.jar` in the same directory
+3. Copy `vega.bat` (or `vega.sh`) to your deployment directory
+
+The scripts use `-cp` to include both JARs on the classpath.
+
+You can override the Vega-GUI location by setting the `VEGA_JAR_PATH` environment variable.
+
+## Development
+
+If you want to run in dev mode, you might need to install the `Vega-GUI` jar to your local maven repository or ensure it is available on the classpath.
+
+## Native Image
+
+Creating a native executable might require additional configuration due to the dynamic loading of the external JAR. The current setup focuses on JVM mode with external JAR.

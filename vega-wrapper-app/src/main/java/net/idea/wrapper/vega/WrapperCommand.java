@@ -260,7 +260,7 @@ public class WrapperCommand implements Callable<Integer> {
                         rowNum++;
                         System.out.print("\rProcessed rows: " + rowNum);
                         if (rowNum % 100 == 0) {
-                            System.out.print(" " + printMemoryUsage());
+                            System.out.print(" " + printMemoryUsage() + "\r");
                         }
                         System.out.flush();
                         
@@ -352,7 +352,7 @@ public class WrapperCommand implements Callable<Integer> {
                 if (rowNum % 100 == 0) {
                     lastMemoryInfo = printMemoryUsage();
                 }                
-                System.out.print("\rProcessed rows: " + rowNum + "  " + lastMemoryInfo + "    ");
+                System.out.print("\rProcessed rows: " + rowNum + " " + lastMemoryInfo + "          \r");
                 System.out.flush();
             
 
