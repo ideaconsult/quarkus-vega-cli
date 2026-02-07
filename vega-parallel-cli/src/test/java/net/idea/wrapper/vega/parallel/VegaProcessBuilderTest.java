@@ -16,22 +16,29 @@ class VegaProcessBuilderTest {
     @Test
     void testCreateProcessForModel(@TempDir Path tempDir) throws IOException {
         String vegaJar = "test.jar";
+        String vegaGuiJar = "vega-gui.jar";
         List<String> baseArgs = Arrays.asList(
                 "-i", "input.txt",
                 "-m", "PLACEHOLDER",
                 "-o", "PLACEHOLDER",
                 "-f");
 
-        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir, "vega");
+        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, vegaGuiJar, baseArgs, tempDir, "vega");
         ProcessBuilder pb = builder.createProcessForModel("MELTING_POINT");
 
         List<String> command = pb.command();
 
-        // Verify command structure
+        // Verify command structure uses -cp instead of -jar
         assertEquals("java", command.get(0));
-        assertEquals("-jar", command.get(1));
-        assertEquals("test.jar", command.get(2));
-        assertEquals("vega", command.get(3));
+        assertTrue(command.get(1).startsWith("-Djava.util.logging.manager="));
+        assertEquals("-cp", command.get(2));
+        // Verify classpath contains both JARs
+        String classpath = command.get(3);
+        assertTrue(classpath.contains("test.jar"));
+        assertTrue(classpath.contains("vega-gui.jar"));
+        // Verify main class
+        assertEquals("io.quarkus.runner.GeneratedMain", command.get(4));
+        assertEquals("vega", command.get(5));
 
         // Verify model is replaced
         assertTrue(command.contains("MELTING_POINT"));
@@ -44,25 +51,28 @@ class VegaProcessBuilderTest {
     @Test
     void testCustomCommand(@TempDir Path tempDir) throws IOException {
         String vegaJar = "test.jar";
+        String vegaGuiJar = "vega-gui.jar";
         List<String> baseArgs = Arrays.asList("-m", "PLACEHOLDER", "-o", "PLACEHOLDER");
         String customCommand = "custom-command";
 
-        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir, customCommand);
+        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, vegaGuiJar, baseArgs, tempDir, customCommand);
         ProcessBuilder pb = builder.createProcessForModel("MODEL1");
         List<String> command = pb.command();
 
         assertEquals("java", command.get(0));
-        assertEquals("-jar", command.get(1));
-        assertEquals("test.jar", command.get(2));
-        assertEquals(customCommand, command.get(3));
+        assertTrue(command.get(1).startsWith("-Djava.util.logging.manager="));
+        assertEquals("-cp", command.get(2));
+        assertEquals("io.quarkus.runner.GeneratedMain", command.get(4));
+        assertEquals(customCommand, command.get(5));
     }
 
     @Test
     void testMultipleModelsUseSameOutputDir(@TempDir Path tempDir) throws IOException {
         String vegaJar = "test.jar";
+        String vegaGuiJar = "vega-gui.jar";
         List<String> baseArgs = Arrays.asList("-m", "PLACEHOLDER", "-o", "PLACEHOLDER");
 
-        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, baseArgs, tempDir, "vega");
+        VegaProcessBuilder builder = new VegaProcessBuilder(vegaJar, vegaGuiJar, baseArgs, tempDir, "vega");
 
         // Create processes for multiple models
         ProcessBuilder pb1 = builder.createProcessForModel("MODEL1");
