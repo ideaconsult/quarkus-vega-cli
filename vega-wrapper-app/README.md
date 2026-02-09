@@ -63,6 +63,16 @@ set VEGA_JAR_PATH=C:\path\to\Vega-GUI.jar
 vega.bat vega --list-models -o models.txt
 ```
 
+```cmd
+rem apply one model to SMILES in a file in fast mode
+vega.bat vega -m BCF_MEYLAN -i test.smi -o output -f
+```
+
+```cmd
+rem apply all models to SMILES in a file in fast mode
+vega vega -m models.txt  -i test.smi -o output -f
+```
+
 ### Linux / Mac
 
 1.  Ensure you have `Vega-GUI-1.2.4.jar` in the same directory as the script.
