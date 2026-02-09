@@ -29,7 +29,7 @@ This wrapper application code is dual-licensed and compatible with:
 - Apache License 2.0
 - GPL-3.0 (when distributed with VEGA-GUI)
 
-**Important**: When you distribute the uber-jar together with VEGA-GUI 1.2.4, the combined distribution must comply with VEGA-GUI's GPL-3.0 license terms. The VEGA-GUI library is licensed under GPL-3.0.
+**Important**: When you distribute thе wrapper jar together with VEGA-GUI 1.2.4, the combined distribution must comply with VEGA-GUI's GPL-3.0 license terms. The VEGA-GUI library is licensed under GPL-3.0.
 
 ## Building the application
 
@@ -37,8 +37,8 @@ The application can be packaged using:
 ```shell script
 ./mvnw package -DskipTests
 ```
-It produces a single uber-jar:
-*   `target/vega-wrapper-app-*-runner.jar`: The application uber-JAR containing all Quarkus dependencies (~20MB).
+It produces a single wrapper jar:
+*   `target/vega-wrapper-app-*-runner.jar`: The application wrapper JAR containing all Quarkus dependencies (~20MB).
 
 The `Vega-GUI` dependency is excluded and must be provided separately at runtime.
 
@@ -88,7 +88,7 @@ They expect the following directory structure:
 ```text
 .
 ├── vega.bat (or vega.sh)
-├── vega-wrapper-app-*-runner.jar  (uber-jar with all Quarkus dependencies)
+├── vega-wrapper-app-*-runner.jar  (wrapper jar with all Quarkus dependencies)
 └── Vega-GUI-1.2.4.jar  (external VEGA JAR)
 ```
 
