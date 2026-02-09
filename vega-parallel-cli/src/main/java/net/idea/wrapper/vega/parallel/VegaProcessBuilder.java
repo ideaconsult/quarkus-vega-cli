@@ -13,12 +13,15 @@ import java.util.List;
 public class VegaProcessBuilder {
 
     private final String vegaJarPath;
+    private final String vegaGuiJarPath;
     private final List<String> baseArgs;
     private final Path outputDir;
     private final String commandName;
 
-    public VegaProcessBuilder(String vegaJarPath, List<String> baseArgs, Path outputDir, String commandName) {
+    public VegaProcessBuilder(String vegaJarPath, String vegaGuiJarPath, List<String> baseArgs, Path outputDir,
+            String commandName) {
         this.vegaJarPath = vegaJarPath;
+        this.vegaGuiJarPath = vegaGuiJarPath;
         this.baseArgs = baseArgs;
         this.outputDir = outputDir;
         this.commandName = commandName;
@@ -37,8 +40,20 @@ public class VegaProcessBuilder {
 
         // Java command
         command.add("java");
-        command.add("-jar");
-        command.add(vegaJarPath);
+
+        // Add Quarkus system property
+        command.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
+
+        // Build classpath with both JARs (platform-specific separator)
+        String pathSeparator = System.getProperty("path.separator"); // ":" on Unix, ";" on Windows
+        String classpath = vegaJarPath + pathSeparator + vegaGuiJarPath;
+        command.add("-cp");
+        command.add(classpath);
+
+        // Specify main class
+        command.add("io.quarkus.runner.GeneratedMain");
+
+        // Add subcommand
         command.add(commandName);
 
         // Add base arguments, replacing -m value only
@@ -87,6 +102,19 @@ public class VegaProcessBuilder {
         }
         if (!Files.isRegularFile(jarPath)) {
             throw new IOException("VEGA JAR path is not a file: " + vegaJarPath);
+        }
+    }
+
+    /**
+     * Validate that the Vega-GUI JAR exists.
+     */
+    public static void validateVegaGuiJar(String vegaGuiJarPath) throws IOException {
+        Path jarPath = Paths.get(vegaGuiJarPath);
+        if (!Files.exists(jarPath)) {
+            throw new IOException("Vega-GUI JAR not found: " + vegaGuiJarPath);
+        }
+        if (!Files.isRegularFile(jarPath)) {
+            throw new IOException("Vega-GUI JAR path is not a file: " + vegaGuiJarPath);
         }
     }
 }

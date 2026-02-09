@@ -22,8 +22,11 @@ public class ParallelVegaCommand implements Runnable {
     @Option(names = { "--workers", "-w" }, description = "Number of parallel workers (default: number of CPU cores)")
     Integer workers;
 
-    @Option(names = { "--vega-jar" }, description = "Path to VEGA JAR file (default: auto-detect)")
+    @Option(names = { "--vega-jar" }, description = "Path to VEGA wrapper JAR file (default: auto-detect)")
     String vegaJarPath;
+
+    @Option(names = { "--vega-gui-jar" }, description = "Path to Vega-GUI JAR file (default: auto-detect)")
+    String vegaGuiJarPath;
 
     // Original VEGA options (pass-through)
     @Option(names = { "-m",
@@ -72,13 +75,16 @@ public class ParallelVegaCommand implements Runnable {
             // Determine number of workers
             int numWorkers = (workers != null && workers > 0) ? workers : Runtime.getRuntime().availableProcessors();
 
-            // Determine VEGA JAR path
+            // Determine VEGA JAR paths
             String jarPath = determineVegaJarPath();
+            String guiJarPath = determineVegaGuiJarPath(jarPath);
             VegaProcessBuilder.validateVegaJar(jarPath);
+            VegaProcessBuilder.validateVegaGuiJar(guiJarPath);
 
             System.out.println("VEGA Parallel Execution Wrapper");
             System.out.println("================================");
-            System.out.println("VEGA JAR: " + jarPath);
+            System.out.println("VEGA Wrapper JAR: " + jarPath);
+            System.out.println("Vega-GUI JAR: " + guiJarPath);
             System.out.println("Workers: " + numWorkers);
             System.out.println();
 
@@ -94,7 +100,8 @@ public class ParallelVegaCommand implements Runnable {
             Files.createDirectories(outputPath);
 
             // Execute models in parallel
-            VegaProcessBuilder processBuilder = new VegaProcessBuilder(jarPath, baseArgs, outputPath, command);
+            VegaProcessBuilder processBuilder = new VegaProcessBuilder(jarPath, guiJarPath, baseArgs, outputPath,
+                    command);
             long modelTimeout = (timeout != null) ? timeout : -1L;
             ModelExecutor executor = new ModelExecutor(processBuilder, numWorkers, models.size(), modelTimeout);
 
@@ -133,7 +140,51 @@ public class ParallelVegaCommand implements Runnable {
             }
         }
 
-        throw new IOException("Could not auto-detect VEGA JAR. Please specify with --vega-jar option.");
+        throw new IOException("Could not auto-detect VEGA wrapper JAR. Please specify with --vega-jar option.");
+    }
+
+    /**
+     * Determine the Vega-GUI JAR path (from option or auto-detect).
+     */
+    private String determineVegaGuiJarPath(String vegaWrapperJarPath) throws IOException {
+        if (vegaGuiJarPath != null) {
+            return vegaGuiJarPath;
+        }
+
+        // Check environment variable
+        String envPath = System.getenv("VEGA_JAR_PATH");
+        if (envPath != null && !envPath.isEmpty()) {
+            Path jarPath = Paths.get(envPath);
+            if (Files.exists(jarPath)) {
+                return jarPath.toAbsolutePath().toString();
+            }
+        }
+
+        // Try to auto-detect relative to vega-wrapper JAR
+        Path wrapperDir = Paths.get(vegaWrapperJarPath).getParent();
+        if (wrapperDir != null) {
+            Path guiJar = wrapperDir.resolve("Vega-GUI-1.2.4.jar");
+            if (Files.exists(guiJar)) {
+                return guiJar.toAbsolutePath().toString();
+            }
+        }
+
+        // Try current directory
+        String[] possiblePaths = {
+                "Vega-GUI-1.2.4.jar",
+                "./Vega-GUI-1.2.4.jar",
+                "../vega-wrapper-app/Vega-GUI-1.2.4.jar"
+        };
+
+        for (String path : possiblePaths) {
+            Path jarPath = Paths.get(path);
+            if (Files.exists(jarPath)) {
+                return jarPath.toAbsolutePath().toString();
+            }
+        }
+
+        throw new IOException(
+                "Could not auto-detect Vega-GUI JAR. Please specify with --vega-gui-jar option or set VEGA_JAR_PATH environment variable.");
     }
 
     /**

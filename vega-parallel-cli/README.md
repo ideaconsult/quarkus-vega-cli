@@ -12,8 +12,8 @@ This tool wraps the existing `vega-wrapper-app` JAR and executes multiple models
 - **Progress Tracking**: Real-time progress display showing completed/failed/running models
 - **Pass-through Options**: Supports all original VEGA CLI options
 - **Cross-platform**: Works on Windows, Linux, and macOS
-- **Auto-detection**: Automatically finds VEGA JAR in common locations
-- **Per-model Output**: Creates separate output directories for each model
+- **Auto-detection**: Automatically finds both VEGA wrapper JAR and Vega-GUI JAR in common locations
+- **Shared Output**: All models write to the same output directory
 
 ## Building
 
@@ -43,7 +43,8 @@ java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
 #### Parallel Execution Options
 
 - `--workers, -w <N>` - Number of parallel workers (default: number of CPU cores)
-- `--vega-jar <path>` - Path to VEGA JAR file (default: auto-detect)
+- `--vega-jar <path>` - Path to VEGA wrapper JAR file (default: auto-detect)
+- `--vega-gui-jar <path>` - Path to Vega-GUI JAR file (default: auto-detect from `VEGA_JAR_PATH` env var or same directory as wrapper JAR)
 - `--timeout <minutes>` - Timeout for single model execution in minutes (default: -1, no timeout)
 
 #### VEGA Subcommand
@@ -98,7 +99,7 @@ java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
   -f
 ```
 
-#### Specify Custom VEGA JAR Path
+#### Specify Custom JAR Paths
 
 ```bash
 java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
@@ -106,6 +107,7 @@ java -jar vega-parallel-cli-1.0.1-SNAPSHOT-runner.jar vega \
   -m models.txt \
   -o output \
   --vega-jar /path/to/vega-wrapper-app-1.2.4-SNAPSHOT-runner.jar \
+  --vega-gui-jar /path/to/Vega-GUI-1.2.4.jar \
   --workers 8
 ```
 
@@ -163,12 +165,19 @@ output_dir/
 
 ## Troubleshooting
 
-### VEGA JAR Not Found
+### VEGA JARs Not Found
 
-If auto-detection fails, specify the JAR path explicitly:
+If auto-detection fails, specify both JAR paths explicitly:
 
 ```bash
---vega-jar ../vega-wrapper-app/target/vega-wrapper-app-1.2.4-SNAPSHOT-runner.jar
+--vega-jar ../vega-wrapper-app/target/vega-wrapper-app-1.2.4-SNAPSHOT-runner.jar \
+--vega-gui-jar ../vega-wrapper-app/Vega-GUI-1.2.4.jar
+```
+
+Or set the `VEGA_JAR_PATH` environment variable to point to the Vega-GUI JAR:
+
+```bash
+export VEGA_JAR_PATH=/path/to/Vega-GUI-1.2.4.jar
 ```
 
 ### Out of Memory
