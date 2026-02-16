@@ -6,14 +6,14 @@ A suite of command-line tools for running [VEGA QSAR](https://www.vegahub.eu/) m
 
 This repository contains two complementary tools for working with VEGA (Virtual models for property Evaluation of chemicals within a Global Architecture):
 
-1. **[vega-wrapper-app](vega-wrapper-app/README.md)** - A Quarkus CLI wrapper for VEGA-GUI that enables command-line execution of VEGA models
+1. **[vega-wrapper-app](vega-wrapper-app/README.md)** - A Quarkus CLI wrapper for VEGA QSAR that enables command-line execution of VEGA models
 2. **[vega-parallel-cli](vega-parallel-cli/README.md)** - A parallel execution wrapper that runs multiple VEGA models concurrently
 
 ## Projects
 
 ### vega-wrapper-app
 
-A Quarkus command-line application that wraps the functionality of `VEGA-GUI.jar`, enabling:
+A Quarkus command-line application that wraps the functionality of VEGA QSAR, enabling:
 - Command-line execution of VEGA QSAR models
 - Batch processing of SMILES files
 - Scriptable model predictions
@@ -26,7 +26,7 @@ A Quarkus command-line application that wraps the functionality of `VEGA-GUI.jar
 A parallel execution wrapper for the VEGA CLI that enables running multiple VEGA models concurrently:
 - Configurable worker pool for parallel execution
 - Real-time progress tracking
-- Automatic VEGA JAR detection
+- Automatic VEGA QSAR JAR detection
 - Shared output directory for all models
 
 **[Read the full documentation →](vega-parallel-cli/README.md)**
@@ -45,13 +45,16 @@ cd ../vega-parallel-cli
 mvn package
 ```
 
-### 2. Download VEGA-GUI
+### 2. Download VEGA QSAR
 
-Download VEGA-GUI version 1.2.4:
+> [!NOTE]
+> Newer versions of VEGA QSAR may work as well, but only the version listed below has been tested.
+
+Download VEGA QSAR, version `1.2.4`:
 - **Direct download**: https://www.vegahub.eu/vegahub-dwn/VEGA-GUI-1.2.4.zip
 - **Download page**: https://www.vegahub.eu/download/vega-qsar-download/
 
-Extract and locate `Vega-GUI-1.2.4.jar`.
+Extract `Vega-GUI-1.2.4.jar`.
 
 ### 3. Run Single Model (vega-wrapper-app)
 
@@ -95,12 +98,7 @@ quarkus-vega-cli/
 
 ## License
 
-This project is dual-licensed:
-- MIT License
-- Apache License 2.0
-- GPL-3.0 (when distributed with VEGA-GUI)
-
-See [LICENSE](LICENSE) for details.
+This project is GPL-3.0 licensed. See [LICENSE](LICENSE) for details.
 
 ## Related Links
 
