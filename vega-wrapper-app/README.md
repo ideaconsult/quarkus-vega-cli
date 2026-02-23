@@ -24,12 +24,7 @@ Extract the ZIP file and locate `Vega-GUI-1.2.4.jar` inside.
 
 ## Licensing
 
-This wrapper application code is dual-licensed and compatible with:
-- MIT License
-- Apache License 2.0
-- GPL-3.0 (when distributed with VEGA-GUI)
-
-**Important**: When you distribute thе wrapper jar together with VEGA-GUI 1.2.4, the combined distribution must comply with VEGA-GUI's GPL-3.0 license terms. The VEGA-GUI library is licensed under GPL-3.0.
+This wrapper application code is GPL-3.0 licensed.
 
 ## Building the application
 
