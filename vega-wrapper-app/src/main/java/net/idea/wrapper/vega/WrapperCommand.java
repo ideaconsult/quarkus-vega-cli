@@ -94,6 +94,10 @@ public class WrapperCommand implements Callable<Integer> {
     @Option(names = {"-l", "--list-models"}, description = "List available models. Specify output file e.g. -o models.txt", help = true)
     boolean listModels;
 
+    @Option(names = {"-d", "--export-datasets"}, description = "Export datasetss. Specify output folder e.g. -o datasets", help = true)
+    boolean exportDatasets;
+
+
         
     public void listAll() throws Exception {
         logger.info("list models");
@@ -202,6 +206,10 @@ public class WrapperCommand implements Callable<Integer> {
             if (listModels) {
                 ImplScanner.list_models(false, outputDir);
                 return 0;
+            }
+            if (exportDatasets) {
+                ImplScanner.export_datasets(outputDir);
+                return 0;                
             } else {
                 if (!outputDir.exists()) {
                     if (!outputDir.mkdirs()) {

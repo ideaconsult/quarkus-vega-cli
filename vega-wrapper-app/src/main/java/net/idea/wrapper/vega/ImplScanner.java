@@ -2,6 +2,7 @@ package net.idea.wrapper.vega;
 
 import insilico.core.model.InsilicoModel;
 import insilico.core.model.InsilicoModelInfo;
+import insilico.core.model.trainingset.TrainingSet;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ScanResult;
 
@@ -15,10 +16,54 @@ import java.io.FileOutputStream;
 
 public class ImplScanner {
 
+    public static void export_datasets(File outputDir) throws Exception {
+
+        if (!outputDir.exists()) {
+            outputDir.mkdirs();
+        }
+
+        try (ScanResult scanResult = new ClassGraph()
+                .enableClassInfo()
+                .acceptPackages("insilico")   // <-- fixed
+                .scan()) {
+
+            var implClasses = scanResult
+                    .getClassesImplementing(insilico.core.model.iInsilicoModel.class)
+                    .loadClasses();
+
+            for (Class<?> clazz : implClasses) {
+                try {
+                    InsilicoModel model = (InsilicoModel) clazz.getDeclaredConstructor().newInstance();
+                    InsilicoModelInfo info = model.getInfo();
+
+                    String key = nullToEmpty(info.getKey());
+                    if (key.isEmpty()) {
+                        key = clazz.getSimpleName(); // fallback
+                    }
+                    File outFile = new File(outputDir, key + ".txt");
+                    System.out.println(outFile);
+                    try (PrintWriter out = new PrintWriter(
+                            new BufferedWriter(
+                                new OutputStreamWriter(
+                                    new FileOutputStream(outFile), StandardCharsets.UTF_8)))) {
+
+                        ((TrainingSet) model.GetTrainingSet()).Print(out, false);
+                    }
+
+                    model.Purge();
+
+                } catch (Exception err) {
+                    System.out.println("Failed: " + clazz.getName());
+                    err.printStackTrace();
+                }
+            }
+        }
+    }
+
     public static void list_models(boolean classnames_only,  File outputFile) throws Exception {
         try (ScanResult scanResult = new ClassGraph()
                 .enableClassInfo()
-                .acceptPackages("insilico.*") // adjust to match your package(s)
+                .acceptPackages("insilico.*") 
                 .scan();
             PrintWriter out = new PrintWriter(
                 new BufferedWriter(
